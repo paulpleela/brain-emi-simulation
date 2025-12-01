@@ -3,16 +3,25 @@
 #SBATCH --output=logs/monopole_%a.out
 #SBATCH --error=logs/monopole_%a.err
 #SBATCH --array=1-16
-#SBATCH --time=02:00:00
+#SBATCH --partition=a100-grind
+#SBATCH --time=01:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=16G
+#SBATCH --mem=32G
+#SBATCH --gres=gpu:1
 
-# HPC job array script for gprMax brain monopole simulations
+# HPC job array script for gprMax brain monopole simulations on Rangpur
+# Configured for a100-grind partition (max 5 days, GPU enabled)
 # This runs 16 simulations in parallel (one per transmit antenna)
 #
+# Rangpur HPC info:
+#   - a100-grind: GPU partition for long jobs (up to 5 days, limited nodes)
+#   - a100: GPU partition (1hr max before preemption, use --requeue)
+#   - a100-test: GPU dev/test partition (20 min max)
+#   - cpu/vcpu: CPU-only partitions
+#
 # Usage:
-#   1. Upload brain_monopole_simulations/ to HPC
+#   1. Upload brain_monopole_realistic/ to HPC
 #   2. Create logs/ directory: mkdir -p logs
 #   3. Submit: sbatch run_monopole_brain_array.sh
 #   4. Monitor: squeue -u $USER
@@ -28,10 +37,10 @@ echo "========================================"
 # Load required modules (adjust for your HPC environment)
 # module load python/3.11
 # module load hdf5
-# module load openmpi
+# module load cuda/11.8  # For GPU acceleration
 
 # Activate conda environment (if using conda)
-# source activate gprmax
+source activate gprmax-env
 
 # Input and output directories - Updated for realistic model
 INPUT_DIR="brain_monopole_realistic"
@@ -49,14 +58,14 @@ fi
 
 # Run gprMax
 echo ""
-echo "Running gprMax..."
+echo "Running gprMax with GPU acceleration..."
 echo ""
 
-# For CPU-only execution
-gprmax "$INPUT_FILE" -n 8
+# GPU execution (A100 GPU available on Rangpur)
+gprmax "$INPUT_FILE" -gpu 0
 
-# For GPU execution (if available, uncomment and adjust):
-# gprmax "$INPUT_FILE" -gpu 0
+# For CPU-only execution (uncomment if GPU fails):
+# gprmax "$INPUT_FILE" -n 8
 
 # Check if simulation completed successfully
 OUTPUT_FILE="${INPUT_FILE%.in}.out"
