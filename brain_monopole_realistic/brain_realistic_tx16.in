@@ -81,9 +81,9 @@ mono_top = gp_z2 + monopole_length
 feed_z = gp_z2
 #end_python:
 
-#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec
-#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec
-#transmission_line: z {x} {y} {feed_z} 50 rx_termination
+#box: {{gp_x1}} {{gp_y1}} {{gp_z1}} {{gp_x2}} {{gp_y2}} {{gp_z2}} pec
+#cylinder: {{x}} {{y}} {{feed_z}} {{x}} {{y}} {{mono_top}} {{wire_radius}} pec
+#transmission_line: z {{x}} {{y}} {{feed_z}} 50 rx_termination
 
 ## Antenna 2
 #python:
@@ -99,9 +99,9 @@ mono_top = gp_z2 + monopole_length
 feed_z = gp_z2
 #end_python:
 
-#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec
-#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec
-#transmission_line: z {x} {y} {feed_z} 50 rx_termination
+#box: {{gp_x1}} {{gp_y1}} {{gp_z1}} {{gp_x2}} {{gp_y2}} {{gp_z2}} pec
+#cylinder: {{x}} {{y}} {{feed_z}} {{x}} {{y}} {{mono_top}} {{wire_radius}} pec
+#transmission_line: z {{x}} {{y}} {{feed_z}} 50 rx_termination
 
 ## Antenna 3
 #python:
@@ -117,9 +117,9 @@ mono_top = gp_z2 + monopole_length
 feed_z = gp_z2
 #end_python:
 
-#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec
-#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec
-#transmission_line: z {x} {y} {feed_z} 50 rx_termination
+#box: {{gp_x1}} {{gp_y1}} {{gp_z1}} {{gp_x2}} {{gp_y2}} {{gp_z2}} pec
+#cylinder: {{x}} {{y}} {{feed_z}} {{x}} {{y}} {{mono_top}} {{wire_radius}} pec
+#transmission_line: z {{x}} {{y}} {{feed_z}} 50 rx_termination
 
 ## Antenna 4
 #python:
@@ -135,9 +135,9 @@ mono_top = gp_z2 + monopole_length
 feed_z = gp_z2
 #end_python:
 
-#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec
-#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec
-#transmission_line: z {x} {y} {feed_z} 50 rx_termination
+#box: {{gp_x1}} {{gp_y1}} {{gp_z1}} {{gp_x2}} {{gp_y2}} {{gp_z2}} pec
+#cylinder: {{x}} {{y}} {{feed_z}} {{x}} {{y}} {{mono_top}} {{wire_radius}} pec
+#transmission_line: z {{x}} {{y}} {{feed_z}} 50 rx_termination
 
 ## Antenna 5
 #python:
@@ -153,9 +153,9 @@ mono_top = gp_z2 + monopole_length
 feed_z = gp_z2
 #end_python:
 
-#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec
-#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec
-#transmission_line: z {x} {y} {feed_z} 50 rx_termination
+#box: {{gp_x1}} {{gp_y1}} {{gp_z1}} {{gp_x2}} {{gp_y2}} {{gp_z2}} pec
+#cylinder: {{x}} {{y}} {{feed_z}} {{x}} {{y}} {{mono_top}} {{wire_radius}} pec
+#transmission_line: z {{x}} {{y}} {{feed_z}} 50 rx_termination
 
 ## Antenna 6
 #python:
@@ -171,9 +171,9 @@ mono_top = gp_z2 + monopole_length
 feed_z = gp_z2
 #end_python:
 
-#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec
-#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec
-#transmission_line: z {x} {y} {feed_z} 50 rx_termination
+#box: {{gp_x1}} {{gp_y1}} {{gp_z1}} {{gp_x2}} {{gp_y2}} {{gp_z2}} pec
+#cylinder: {{x}} {{y}} {{feed_z}} {{x}} {{y}} {{mono_top}} {{wire_radius}} pec
+#transmission_line: z {{x}} {{y}} {{feed_z}} 50 rx_termination
 
 ## Antenna 7
 #python:
@@ -189,9 +189,9 @@ mono_top = gp_z2 + monopole_length
 feed_z = gp_z2
 #end_python:
 
-#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec
-#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec
-#transmission_line: z {x} {y} {feed_z} 50 rx_termination
+#box: {{gp_x1}} {{gp_y1}} {{gp_z1}} {{gp_x2}} {{gp_y2}} {{gp_z2}} pec
+#cylinder: {{x}} {{y}} {{feed_z}} {{x}} {{y}} {{mono_top}} {{wire_radius}} pec
+#transmission_line: z {{x}} {{y}} {{feed_z}} 50 rx_termination
 
 ## Antenna 8
 #python:
@@ -207,9 +207,9 @@ mono_top = gp_z2 + monopole_length
 feed_z = gp_z2
 #end_python:
 
-#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec
-#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec
-#transmission_line: z {x} {y} {feed_z} 50 rx_termination
+#box: {{gp_x1}} {{gp_y1}} {{gp_z1}} {{gp_x2}} {{gp_y2}} {{gp_z2}} pec
+#cylinder: {{x}} {{y}} {{feed_z}} {{x}} {{y}} {{mono_top}} {{wire_radius}} pec
+#transmission_line: z {{x}} {{y}} {{feed_z}} 50 rx_termination
 
 ## Antenna 9
 #python:
@@ -225,9 +225,9 @@ mono_top = gp_z2 + monopole_length
 feed_z = gp_z2
 #end_python:
 
-#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec
-#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec
-#transmission_line: z {x} {y} {feed_z} 50 rx_termination
+#box: {{gp_x1}} {{gp_y1}} {{gp_z1}} {{gp_x2}} {{gp_y2}} {{gp_z2}} pec
+#cylinder: {{x}} {{y}} {{feed_z}} {{x}} {{y}} {{mono_top}} {{wire_radius}} pec
+#transmission_line: z {{x}} {{y}} {{feed_z}} 50 rx_termination
 
 ## Antenna 10
 #python:
@@ -243,9 +243,9 @@ mono_top = gp_z2 + monopole_length
 feed_z = gp_z2
 #end_python:
 
-#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec
-#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec
-#transmission_line: z {x} {y} {feed_z} 50 rx_termination
+#box: {{gp_x1}} {{gp_y1}} {{gp_z1}} {{gp_x2}} {{gp_y2}} {{gp_z2}} pec
+#cylinder: {{x}} {{y}} {{feed_z}} {{x}} {{y}} {{mono_top}} {{wire_radius}} pec
+#transmission_line: z {{x}} {{y}} {{feed_z}} 50 rx_termination
 
 ## Antenna 11
 #python:
@@ -261,9 +261,9 @@ mono_top = gp_z2 + monopole_length
 feed_z = gp_z2
 #end_python:
 
-#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec
-#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec
-#transmission_line: z {x} {y} {feed_z} 50 rx_termination
+#box: {{gp_x1}} {{gp_y1}} {{gp_z1}} {{gp_x2}} {{gp_y2}} {{gp_z2}} pec
+#cylinder: {{x}} {{y}} {{feed_z}} {{x}} {{y}} {{mono_top}} {{wire_radius}} pec
+#transmission_line: z {{x}} {{y}} {{feed_z}} 50 rx_termination
 
 ## Antenna 12
 #python:
@@ -279,9 +279,9 @@ mono_top = gp_z2 + monopole_length
 feed_z = gp_z2
 #end_python:
 
-#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec
-#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec
-#transmission_line: z {x} {y} {feed_z} 50 rx_termination
+#box: {{gp_x1}} {{gp_y1}} {{gp_z1}} {{gp_x2}} {{gp_y2}} {{gp_z2}} pec
+#cylinder: {{x}} {{y}} {{feed_z}} {{x}} {{y}} {{mono_top}} {{wire_radius}} pec
+#transmission_line: z {{x}} {{y}} {{feed_z}} 50 rx_termination
 
 ## Antenna 13
 #python:
@@ -297,9 +297,9 @@ mono_top = gp_z2 + monopole_length
 feed_z = gp_z2
 #end_python:
 
-#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec
-#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec
-#transmission_line: z {x} {y} {feed_z} 50 rx_termination
+#box: {{gp_x1}} {{gp_y1}} {{gp_z1}} {{gp_x2}} {{gp_y2}} {{gp_z2}} pec
+#cylinder: {{x}} {{y}} {{feed_z}} {{x}} {{y}} {{mono_top}} {{wire_radius}} pec
+#transmission_line: z {{x}} {{y}} {{feed_z}} 50 rx_termination
 
 ## Antenna 14
 #python:
@@ -315,9 +315,9 @@ mono_top = gp_z2 + monopole_length
 feed_z = gp_z2
 #end_python:
 
-#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec
-#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec
-#transmission_line: z {x} {y} {feed_z} 50 rx_termination
+#box: {{gp_x1}} {{gp_y1}} {{gp_z1}} {{gp_x2}} {{gp_y2}} {{gp_z2}} pec
+#cylinder: {{x}} {{y}} {{feed_z}} {{x}} {{y}} {{mono_top}} {{wire_radius}} pec
+#transmission_line: z {{x}} {{y}} {{feed_z}} 50 rx_termination
 
 ## Antenna 15
 #python:
@@ -333,9 +333,9 @@ mono_top = gp_z2 + monopole_length
 feed_z = gp_z2
 #end_python:
 
-#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec
-#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec
-#transmission_line: z {x} {y} {feed_z} 50 rx_termination
+#box: {{gp_x1}} {{gp_y1}} {{gp_z1}} {{gp_x2}} {{gp_y2}} {{gp_z2}} pec
+#cylinder: {{x}} {{y}} {{feed_z}} {{x}} {{y}} {{mono_top}} {{wire_radius}} pec
+#transmission_line: z {{x}} {{y}} {{feed_z}} 50 rx_termination
 
 ## Antenna 16
 #python:
@@ -351,8 +351,8 @@ mono_top = gp_z2 + monopole_length
 feed_z = gp_z2
 #end_python:
 
-#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec
-#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec
-#transmission_line: z {x} {y} {feed_z} 50 tx_pulse
+#box: {{gp_x1}} {{gp_y1}} {{gp_z1}} {{gp_x2}} {{gp_y2}} {{gp_z2}} pec
+#cylinder: {{x}} {{y}} {{feed_z}} {{x}} {{y}} {{mono_top}} {{wire_radius}} pec
+#transmission_line: z {{x}} {{y}} {{feed_z}} 50 tx_pulse
 
 ## End of input file
