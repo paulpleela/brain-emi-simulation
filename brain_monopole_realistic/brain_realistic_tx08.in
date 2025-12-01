@@ -10,7 +10,7 @@
 
 ## Waveforms (optimized for 0-2 GHz)
 #waveform: gaussian 1 1e9 tx_pulse
-#waveform: gaussian 1 0 rx_termination
+#waveform: gaussian 1 1e9 rx_termination
 
 ## Materials
 #material: inf 0 1 0 pec

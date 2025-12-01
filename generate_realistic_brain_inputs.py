@@ -112,8 +112,10 @@ for src_idx in range(n_antennas):
         
         # Waveforms - Gaussian centered at 1 GHz for 0-2 GHz bandwidth
         f.write(f"## Waveforms (optimized for 0-2 GHz)\n")
+        # Use a positive center frequency for the receiver termination waveform
+        # gprMax requires the excitation frequency to be > 0
         f.write(f"#waveform: gaussian 1 1e9 tx_pulse\n")
-        f.write(f"#waveform: gaussian 1 0 rx_termination\n\n")
+        f.write(f"#waveform: gaussian 1 1e9 rx_termination\n\n")
         
         # Materials
         f.write(f"## Materials\n")
