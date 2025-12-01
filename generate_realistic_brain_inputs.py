@@ -171,9 +171,15 @@ for src_idx in range(n_antennas):
         f.write(f"gp_half_size = {gp_half_size}\n")
         f.write(f"gp_thickness = {gp_thickness}\n")
         f.write(f"n_antennas = {n_antennas}\n\n")
-        
         f.write(f"# Compute antenna positions (touching coupling medium)\n")
         f.write(f"antenna_positions = []\n")
+        # Add required imports and aliases so gprMax's python execution sees them
+        f.write(f"import math\n")
+        f.write(f"head_center = ({head_center[0]}, {head_center[1]}, {head_center[2]})\n")
+        f.write(f"a = {head_semi_axes['a']}\n")
+        f.write(f"b = {head_semi_axes['b']}\n")
+        f.write(f"scalp_thickness = {scalp_skull_thickness}\n")
+        f.write(f"coupling_thickness = {coupling_thickness}\n")
         f.write(f"for i in range(n_antennas):\n")
         f.write(f"    angle = 2 * math.pi * i / n_antennas\n")
         f.write(f"    # Position on ellipse + coupling + ground plane clearance\n")

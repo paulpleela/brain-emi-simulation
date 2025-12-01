@@ -50,6 +50,12 @@ n_antennas = 16
 
 # Compute antenna positions (touching coupling medium)
 antenna_positions = []
+import math
+head_center = (0.25, 0.25, 0.25)
+a = 0.095
+b = 0.075
+scalp_thickness = 0.01
+coupling_thickness = 0.005
 for i in range(n_antennas):
     angle = 2 * math.pi * i / n_antennas
     # Position on ellipse + coupling + ground plane clearance
