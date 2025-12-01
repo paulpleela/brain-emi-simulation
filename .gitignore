@@ -1,0 +1,45 @@
+# gprMax output files
+*.out
+*.png
+*.s16p
+*.s1p
+*.s2p
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Output directories
+/figures/
+/sij_plots/
+/s16p_simulations/
+/brain_monopole_simulations/
+/logs/
+
+# Large data
+/gprMax/
+*.zip
+*.tar.gz
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
