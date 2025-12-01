@@ -39,7 +39,20 @@ echo "========================================"
 # module load cuda/11.8  # For GPU acceleration
 
 # Activate conda environment (if using conda)
-source activate gprmax-env
+# Prefer the user's existing environment name `gprmax`.
+# Use a robust activation that works whether conda is initialized or not.
+if command -v conda >/dev/null 2>&1; then
+    # If conda is available in PATH, activate directly
+    conda activate gprmax || true
+else
+    # Fallback: source common conda profile locations then activate
+    if [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
+        . "$HOME/miniconda3/etc/profile.d/conda.sh"
+    elif [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
+        . "$HOME/anaconda3/etc/profile.d/conda.sh"
+    fi
+    conda activate gprmax || true
+fi
 
 # Input and output directories - Updated for realistic model
 INPUT_DIR="brain_monopole_realistic"
