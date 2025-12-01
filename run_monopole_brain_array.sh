@@ -61,10 +61,10 @@ echo "Running gprMax with GPU acceleration..."
 echo ""
 
 # GPU execution (A100 GPU available on Rangpur)
-gprmax "$INPUT_FILE" -gpu 0
+python -m gprMax "$INPUT_FILE" -gpu 0
 
 # For CPU-only execution (uncomment if GPU fails):
-# gprmax "$INPUT_FILE" -n 8
+# python -m gprMax "$INPUT_FILE" -n 8
 
 # Check if simulation completed successfully
 OUTPUT_FILE="${INPUT_FILE%.in}.out"
