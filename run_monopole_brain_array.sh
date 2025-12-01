@@ -3,11 +3,10 @@
 #SBATCH --output=logs/monopole_%a.out
 #SBATCH --error=logs/monopole_%a.err
 #SBATCH --array=1-16
-#SBATCH --partition=a100-grind
+#SBATCH --partition=cpu
 #SBATCH --time=01:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
-#SBATCH --gres=gpu:1
 
 # HPC job array script for gprMax brain monopole simulations on Rangpur
 # Configured for a100-grind partition (max 5 days, GPU enabled)
@@ -36,7 +35,7 @@ echo "========================================"
 # Load required modules (adjust for your HPC environment)
 # module load python/3.11
 # module load hdf5
-# module load cuda/11.8  # For GPU acceleration
+# (No CUDA / GPU module required for CPU-only runs)
 
 # Activate conda environment (if using conda)
 # Prefer the user's existing environment name `gprmax`.
@@ -68,16 +67,13 @@ if [ ! -f "$INPUT_FILE" ]; then
     exit 1
 fi
 
-# Run gprMax
+# Run gprMax (CPU-only)
 echo ""
-echo "Running gprMax with GPU acceleration..."
+echo "Running gprMax in CPU-only mode using $SLURM_CPUS_PER_TASK threads..."
 echo ""
 
-# GPU execution (A100 GPU available on Rangpur)
-python -m gprMax "$INPUT_FILE" -gpu 0
-
-# For CPU-only execution (uncomment if GPU fails):
-# python -m gprMax "$INPUT_FILE" -n 8
+# Run gprMax on CPU using the number of CPU threads allocated by Slurm
+python -m gprMax "$INPUT_FILE" -n "$SLURM_CPUS_PER_TASK"
 
 # Check if simulation completed successfully
 OUTPUT_FILE="${INPUT_FILE%.in}.out"
