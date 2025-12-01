@@ -1,0 +1,12 @@
+# Minimal Python dependencies for the thesis gprMax workspace
+# Note: Install gprMax separately if you will run full simulations (see REALISTIC_MODEL_README.md)
+
+numpy>=1.24
+scipy>=1.10
+matplotlib>=3.6
+h5py>=3.8
+pandas>=2.0
+seaborn>=0.12
+# Optional / useful tools
+tqdm>=4.65
+meshio>=5.4
