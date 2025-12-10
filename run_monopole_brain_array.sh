@@ -59,9 +59,6 @@ else
     exit 1
 fi
 echo ""
-    fi
-fi
-echo ""
 
 # Activate conda environment (if using conda)
 # Prefer the user's existing environment name `gprmax`.
