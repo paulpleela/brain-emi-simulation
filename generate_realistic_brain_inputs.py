@@ -206,17 +206,16 @@ for src_idx in range(n_antennas):
             f.write(f"gp_z1 = z_base - gp_thickness/2\n")
             f.write(f"gp_z2 = z_base + gp_thickness/2\n")
             f.write(f"mono_top = gp_z2 + monopole_length\n")
-            f.write(f"feed_z = gp_z2\n")
-            f.write(f"#end_python:\n\n")
+            f.write(f"feed_z = gp_z2\n\n")
             
-            # Write geometry commands with gprMax variable substitution syntax
-            # Use double braces in f-string to produce single braces in output
-            f.write(f"#box: {{gp_x1}} {{gp_y1}} {{gp_z1}} {{gp_x2}} {{gp_y2}} {{gp_z2}} pec\n")
-            f.write(f"#cylinder: {{x}} {{y}} {{feed_z}} {{x}} {{y}} {{mono_top}} {{wire_radius}} pec\n")
-            
+            # Write geometry commands INSIDE the Python block using print()
+            # This way Python evaluates the variables and outputs the actual commands
             is_transmitter = (ant_idx == src_idx)
             waveform = "tx_pulse" if is_transmitter else "rx_termination"
-            f.write(f"#transmission_line: z {{x}} {{y}} {{feed_z}} 50 {waveform}\n")
+            f.write(f"print(f'#box: {{{{gp_x1}}}} {{{{gp_y1}}}} {{{{gp_z1}}}} {{{{gp_x2}}}} {{{{gp_y2}}}} {{{{gp_z2}}}} pec')\n")
+            f.write(f"print(f'#cylinder: {{{{x}}}} {{{{y}}}} {{{{feed_z}}}} {{{{x}}}} {{{{y}}}} {{{{mono_top}}}} {{{{wire_radius}}}} pec')\n")
+            f.write(f"print(f'#transmission_line: z {{{{x}}}} {{{{y}}}} {{{{feed_z}}}} 50 {waveform}')\n")
+            f.write(f"#end_python:\n")
         
         f.write(f"\n## End of input file\n")
     
