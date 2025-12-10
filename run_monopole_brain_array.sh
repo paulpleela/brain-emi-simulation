@@ -33,36 +33,32 @@ echo "Node: $SLURM_NODELIST"
 echo "Start time: $(date)"
 echo "========================================"
 
-# Load CUDA module - try multiple versions
+# Load CUDA module - try available versions on Rangpur
 echo "Loading CUDA module..."
-if module load cuda/11.8 2>/dev/null; then
-    echo "Loaded CUDA 11.8"
-elif module load cuda/12.0 2>/dev/null; then
-    echo "Loaded CUDA 12.0"
-elif module load cuda 2>/dev/null; then
-    echo "Loaded default CUDA"
+if module load cuda/12.2 2>/dev/null; then
+    echo "Loaded CUDA 12.2"
+elif module load cuda/11.4 2>/dev/null; then
+    echo "Loaded CUDA 11.4"
+elif module load cuda/11.1 2>/dev/null; then
+    echo "Loaded CUDA 11.1"
 else
-    echo "WARNING: Could not load CUDA module"
-    echo "Available modules:"
-    module avail cuda 2>&1 | grep -i cuda || echo "No CUDA modules found"
+    echo "WARNING: Could not load CUDA module, trying manual PATH setup..."
+    # Manually add CUDA 11.4 to PATH (most compatible)
+    export PATH="/usr/local/cuda-11.4/bin:$PATH"
+    export LD_LIBRARY_PATH="/usr/local/cuda-11.4/lib64:$LD_LIBRARY_PATH"
+    echo "Manually added CUDA 11.4 to PATH"
 fi
 
 # Verify nvcc is available
 if command -v nvcc &> /dev/null; then
-    echo "nvcc found: $(which nvcc)"
+    echo "✓ nvcc found: $(which nvcc)"
     nvcc --version | head -n 1
 else
-    echo "ERROR: nvcc not found in PATH"
+    echo "✗ ERROR: nvcc still not found in PATH"
     echo "PATH: $PATH"
-    echo "Trying to find CUDA installations..."
-    ls -la /usr/local/ | grep cuda || echo "No CUDA in /usr/local/"
-    ls -la /opt/ | grep cuda || echo "No CUDA in /opt/"
-    
-    # Try to manually add CUDA to PATH if found
-    if [ -d "/usr/local/cuda/bin" ]; then
-        export PATH="/usr/local/cuda/bin:$PATH"
-        export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH"
-        echo "Added /usr/local/cuda to PATH"
+    exit 1
+fi
+echo ""
     fi
 fi
 echo ""
