@@ -13,7 +13,6 @@
 #waveform: gaussian 1 1e9 rx_termination
 
 ## Materials
-#material: inf 0 1 0 pec
 #material: 32.0 0.585 1 0 coupling_medium
 #material: 12 0.2 1 0 scalp_skull
 #material: 52 0.97 1 0 gray_matter

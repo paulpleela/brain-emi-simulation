@@ -119,7 +119,6 @@ for src_idx in range(n_antennas):
         
         # Materials
         f.write(f"## Materials\n")
-        f.write(f"#material: inf 0 1 0 pec\n")
         f.write(f"#material: {coupling_eps_r} {coupling_sigma} 1 0 coupling_medium\n")
         f.write(f"#material: 12 0.2 1 0 scalp_skull\n")
         f.write(f"#material: 52 0.97 1 0 gray_matter\n")
