@@ -33,8 +33,39 @@ echo "Node: $SLURM_NODELIST"
 echo "Start time: $(date)"
 echo "========================================"
 
-# Load CUDA module
-module load cuda/11.8 2>/dev/null || module load cuda 2>/dev/null || true
+# Load CUDA module - try multiple versions
+echo "Loading CUDA module..."
+if module load cuda/11.8 2>/dev/null; then
+    echo "Loaded CUDA 11.8"
+elif module load cuda/12.0 2>/dev/null; then
+    echo "Loaded CUDA 12.0"
+elif module load cuda 2>/dev/null; then
+    echo "Loaded default CUDA"
+else
+    echo "WARNING: Could not load CUDA module"
+    echo "Available modules:"
+    module avail cuda 2>&1 | grep -i cuda || echo "No CUDA modules found"
+fi
+
+# Verify nvcc is available
+if command -v nvcc &> /dev/null; then
+    echo "nvcc found: $(which nvcc)"
+    nvcc --version | head -n 1
+else
+    echo "ERROR: nvcc not found in PATH"
+    echo "PATH: $PATH"
+    echo "Trying to find CUDA installations..."
+    ls -la /usr/local/ | grep cuda || echo "No CUDA in /usr/local/"
+    ls -la /opt/ | grep cuda || echo "No CUDA in /opt/"
+    
+    # Try to manually add CUDA to PATH if found
+    if [ -d "/usr/local/cuda/bin" ]; then
+        export PATH="/usr/local/cuda/bin:$PATH"
+        export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH"
+        echo "Added /usr/local/cuda to PATH"
+    fi
+fi
+echo ""
 
 # Activate conda environment (if using conda)
 # Prefer the user's existing environment name `gprmax`.
