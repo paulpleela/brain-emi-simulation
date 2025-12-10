@@ -212,10 +212,10 @@ for src_idx in range(n_antennas):
             # This way Python evaluates the variables and outputs the actual commands
             is_transmitter = (ant_idx == src_idx)
             waveform = "tx_pulse" if is_transmitter else "rx_termination"
-            f.write(f"print(f'#box: {{{{gp_x1}}}} {{{{gp_y1}}}} {{{{gp_z1}}}} {{{{gp_x2}}}} {{{{gp_y2}}}} {{{{gp_z2}}}} pec')\n")
-            f.write(f"print(f'#cylinder: {{{{x}}}} {{{{y}}}} {{{{feed_z}}}} {{{{x}}}} {{{{y}}}} {{{{mono_top}}}} {{{{wire_radius}}}} pec')\n")
-            f.write(f"print(f'#transmission_line: z {{{{x}}}} {{{{y}}}} {{{{feed_z}}}} 50 {waveform}')\n")
-            f.write(f"#end_python:\n")
+            f.write("print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')\n")
+            f.write("print(f'#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec')\n")
+            f.write(f"print(f'#transmission_line: z {{x}} {{y}} {{feed_z}} 50 {waveform}')\n")
+            f.write("#end_python:\n")
         
         f.write(f"\n## End of input file\n")
     
