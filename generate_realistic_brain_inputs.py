@@ -210,13 +210,13 @@ for src_idx in range(n_antennas):
             f.write(f"#end_python:\n\n")
             
             # Write geometry commands with gprMax variable substitution syntax
-            # Use single braces for gprMax variables (they get replaced at runtime)
-            f.write(f"#box: {{{{gp_x1}}}} {{{{gp_y1}}}} {{{{gp_z1}}}} {{{{gp_x2}}}} {{{{gp_y2}}}} {{{{gp_z2}}}} pec\n")
-            f.write(f"#cylinder: {{{{x}}}} {{{{y}}}} {{{{feed_z}}}} {{{{x}}}} {{{{y}}}} {{{{mono_top}}}} {{{{wire_radius}}}} pec\n")
+            # Use double braces in f-string to produce single braces in output
+            f.write(f"#box: {{gp_x1}} {{gp_y1}} {{gp_z1}} {{gp_x2}} {{gp_y2}} {{gp_z2}} pec\n")
+            f.write(f"#cylinder: {{x}} {{y}} {{feed_z}} {{x}} {{y}} {{mono_top}} {{wire_radius}} pec\n")
             
             is_transmitter = (ant_idx == src_idx)
             waveform = "tx_pulse" if is_transmitter else "rx_termination"
-            f.write(f"#transmission_line: z {{{{x}}}} {{{{y}}}} {{{{feed_z}}}} 50 {waveform}\n")
+            f.write(f"#transmission_line: z {{x}} {{y}} {{feed_z}} 50 {waveform}\n")
         
         f.write(f"\n## End of input file\n")
     
