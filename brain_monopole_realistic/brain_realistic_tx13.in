@@ -10,7 +10,6 @@
 
 ## Waveforms (optimized for 0-2 GHz)
 #waveform: gaussian 1 1e9 tx_pulse
-#waveform: gaussian 1 1e9 rx_termination
 
 ## Materials
 #material: 32.0 0.585 1 0 coupling_medium
@@ -81,7 +80,7 @@ feed_z = gp_z2
 
 print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')
 print(f'#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec')
-print(f'#transmission_line: z {x} {y} {feed_z} 50 rx_termination')
+print(f'#rx: {x} {y} {feed_z}')
 #end_python:
 
 ## Antenna 2
@@ -99,7 +98,7 @@ feed_z = gp_z2
 
 print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')
 print(f'#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec')
-print(f'#transmission_line: z {x} {y} {feed_z} 50 rx_termination')
+print(f'#rx: {x} {y} {feed_z}')
 #end_python:
 
 ## Antenna 3
@@ -117,7 +116,7 @@ feed_z = gp_z2
 
 print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')
 print(f'#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec')
-print(f'#transmission_line: z {x} {y} {feed_z} 50 rx_termination')
+print(f'#rx: {x} {y} {feed_z}')
 #end_python:
 
 ## Antenna 4
@@ -135,7 +134,7 @@ feed_z = gp_z2
 
 print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')
 print(f'#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec')
-print(f'#transmission_line: z {x} {y} {feed_z} 50 rx_termination')
+print(f'#rx: {x} {y} {feed_z}')
 #end_python:
 
 ## Antenna 5
@@ -153,7 +152,7 @@ feed_z = gp_z2
 
 print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')
 print(f'#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec')
-print(f'#transmission_line: z {x} {y} {feed_z} 50 rx_termination')
+print(f'#rx: {x} {y} {feed_z}')
 #end_python:
 
 ## Antenna 6
@@ -171,7 +170,7 @@ feed_z = gp_z2
 
 print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')
 print(f'#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec')
-print(f'#transmission_line: z {x} {y} {feed_z} 50 rx_termination')
+print(f'#rx: {x} {y} {feed_z}')
 #end_python:
 
 ## Antenna 7
@@ -189,7 +188,7 @@ feed_z = gp_z2
 
 print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')
 print(f'#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec')
-print(f'#transmission_line: z {x} {y} {feed_z} 50 rx_termination')
+print(f'#rx: {x} {y} {feed_z}')
 #end_python:
 
 ## Antenna 8
@@ -207,7 +206,7 @@ feed_z = gp_z2
 
 print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')
 print(f'#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec')
-print(f'#transmission_line: z {x} {y} {feed_z} 50 rx_termination')
+print(f'#rx: {x} {y} {feed_z}')
 #end_python:
 
 ## Antenna 9
@@ -225,7 +224,7 @@ feed_z = gp_z2
 
 print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')
 print(f'#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec')
-print(f'#transmission_line: z {x} {y} {feed_z} 50 rx_termination')
+print(f'#rx: {x} {y} {feed_z}')
 #end_python:
 
 ## Antenna 10
@@ -243,7 +242,7 @@ feed_z = gp_z2
 
 print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')
 print(f'#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec')
-print(f'#transmission_line: z {x} {y} {feed_z} 50 rx_termination')
+print(f'#rx: {x} {y} {feed_z}')
 #end_python:
 
 ## Antenna 11
@@ -261,7 +260,7 @@ feed_z = gp_z2
 
 print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')
 print(f'#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec')
-print(f'#transmission_line: z {x} {y} {feed_z} 50 rx_termination')
+print(f'#rx: {x} {y} {feed_z}')
 #end_python:
 
 ## Antenna 12
@@ -279,7 +278,7 @@ feed_z = gp_z2
 
 print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')
 print(f'#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec')
-print(f'#transmission_line: z {x} {y} {feed_z} 50 rx_termination')
+print(f'#rx: {x} {y} {feed_z}')
 #end_python:
 
 ## Antenna 13
@@ -297,7 +296,8 @@ feed_z = gp_z2
 
 print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')
 print(f'#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec')
-print(f'#transmission_line: z {x} {y} {feed_z} 50 tx_pulse')
+print(f'#voltage_source: z {x} {y} {feed_z} 50 tx_pulse')
+print(f'#rx: {x} {y} {feed_z}')
 #end_python:
 
 ## Antenna 14
@@ -315,7 +315,7 @@ feed_z = gp_z2
 
 print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')
 print(f'#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec')
-print(f'#transmission_line: z {x} {y} {feed_z} 50 rx_termination')
+print(f'#rx: {x} {y} {feed_z}')
 #end_python:
 
 ## Antenna 15
@@ -333,7 +333,7 @@ feed_z = gp_z2
 
 print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')
 print(f'#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec')
-print(f'#transmission_line: z {x} {y} {feed_z} 50 rx_termination')
+print(f'#rx: {x} {y} {feed_z}')
 #end_python:
 
 ## Antenna 16
@@ -351,7 +351,7 @@ feed_z = gp_z2
 
 print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')
 print(f'#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec')
-print(f'#transmission_line: z {x} {y} {feed_z} 50 rx_termination')
+print(f'#rx: {x} {y} {feed_z}')
 #end_python:
 
 ## End of input file

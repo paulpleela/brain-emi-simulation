@@ -112,10 +112,7 @@ for src_idx in range(n_antennas):
         
         # Waveforms - Gaussian centered at 1 GHz for 0-2 GHz bandwidth
         f.write(f"## Waveforms (optimized for 0-2 GHz)\n")
-        # Use a positive center frequency for the receiver termination waveform
-        # gprMax requires the excitation frequency to be > 0
-        f.write(f"#waveform: gaussian 1 1e9 tx_pulse\n")
-        f.write(f"#waveform: gaussian 1 1e9 rx_termination\n\n")
+        f.write(f"#waveform: gaussian 1 1e9 tx_pulse\n\n")
         
         # Materials
         f.write(f"## Materials\n")
@@ -210,10 +207,15 @@ for src_idx in range(n_antennas):
             # Write geometry commands INSIDE the Python block using print()
             # This way Python evaluates the variables and outputs the actual commands
             is_transmitter = (ant_idx == src_idx)
-            waveform = "tx_pulse" if is_transmitter else "rx_termination"
             f.write("print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')\n")
             f.write("print(f'#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec')\n")
-            f.write(f"print(f'#transmission_line: z {{x}} {{y}} {{feed_z}} 50 {waveform}')\n")
+            
+            # Use voltage_source for GPU compatibility (transmission_line not supported on GPU)
+            if is_transmitter:
+                f.write("print(f'#voltage_source: z {x} {y} {feed_z} 50 tx_pulse')\n")
+            
+            # Add receiver at every antenna position (for multi-static S-parameter extraction)
+            f.write(f"print(f'#rx: {{x}} {{y}} {{feed_z}}')\n")
             f.write("#end_python:\n")
         
         f.write(f"\n## End of input file\n")
