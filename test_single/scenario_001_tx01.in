@@ -1,0 +1,240 @@
+## Scenario 001 - Transmit 1/16
+## Healthy baseline
+#title: scenario_001_tx01
+
+#domain: 0.6 0.6 0.6
+#dx_dy_dz: 0.002 0.002 0.002
+#time_window: 15e-9
+
+#waveform: gaussian 1 1e9 tx_pulse
+
+## Materials
+#material: 32 0.585 1 0 coupling_medium
+#material: 12 0.2 1 0 scalp_skull
+#material: 52 0.97 1 0 gray_matter
+#material: 38 0.57 1 0 white_matter
+#material: 80 2.0 1 0 csf
+#material: 61 1.54 1 0 blood
+
+## Ellipsoidal head geometry
+#python:
+import numpy as np
+head_center = np.array([0.25, 0.25, 0.25])
+a, b, c = 0.095, 0.075, 0.115
+scalp_thickness = 0.01
+gray_thickness = 0.003
+coupling_thickness = 0.005
+geo_res = 0.004
+
+def in_ellipsoid(x, y, z, center, a, b, c):
+    dx, dy, dz = (x-center[0])/a, (y-center[1])/b, (z-center[2])/c
+    return (dx*dx + dy*dy + dz*dz) <= 1.0
+
+x_min = head_center[0] - (a + scalp_thickness + coupling_thickness + 0.01)
+x_max = head_center[0] + (a + scalp_thickness + coupling_thickness + 0.01)
+y_min = head_center[1] - (b + scalp_thickness + coupling_thickness + 0.01)
+y_max = head_center[1] + (b + scalp_thickness + coupling_thickness + 0.01)
+z_min = head_center[2] - (c + scalp_thickness + coupling_thickness + 0.01)
+z_max = head_center[2] + (c + scalp_thickness + coupling_thickness + 0.01)
+
+for x in np.arange(x_min, x_max, geo_res):
+    for y in np.arange(y_min, y_max, geo_res):
+        for z in np.arange(z_min, z_max, geo_res):
+            if in_ellipsoid(x, y, z, head_center, a+scalp_thickness+coupling_thickness, b+scalp_thickness+coupling_thickness, c+scalp_thickness+coupling_thickness):
+                material = 'coupling_medium'
+                if in_ellipsoid(x, y, z, head_center, a+scalp_thickness, b+scalp_thickness, c+scalp_thickness):
+                    material = 'scalp_skull'
+                    if in_ellipsoid(x, y, z, head_center, a, b, c):
+                        material = 'gray_matter'
+                        if in_ellipsoid(x, y, z, head_center, a-gray_thickness, b-gray_thickness, c-gray_thickness):
+                            material = 'white_matter'
+                print(f'#box: {x} {y} {z} {x+geo_res} {y+geo_res} {z+geo_res} {material}')
+#end_python:
+
+## CSF Ventricles
+#python:
+vent_a, vent_b, vent_c = 0.020, 0.010, 0.040
+vent_left = np.array([head_center[0]-0.0075, head_center[1], head_center[2]])
+vent_right = np.array([head_center[0]+0.0075, head_center[1], head_center[2]])
+for x in np.arange(head_center[0]-0.035, head_center[0]+0.035, geo_res):
+    for y in np.arange(head_center[1]-0.015, head_center[1]+0.015, geo_res):
+        for z in np.arange(head_center[2]-0.045, head_center[2]+0.045, geo_res):
+            if in_ellipsoid(x,y,z,vent_left,vent_a,vent_b,vent_c) or in_ellipsoid(x,y,z,vent_right,vent_a,vent_b,vent_c):
+                print(f'#box: {x} {y} {z} {x+geo_res} {y+geo_res} {z+geo_res} csf')
+#end_python:
+
+## Antennas
+#python:
+import math
+monopole_length, wire_radius = 0.0375, 0.001
+gp_half_size, gp_thickness = 0.0375, 0.002
+n_antennas = 16
+antenna_positions = []
+for i in range(n_antennas):
+    angle = 2 * math.pi * i / n_antennas
+    x = head_center[0] + (a + scalp_thickness + coupling_thickness + gp_half_size) * math.cos(angle)
+    y = head_center[1] + (b + scalp_thickness + coupling_thickness + gp_half_size) * math.sin(angle)
+    z = head_center[2]
+    antenna_positions.append((x, y, z))
+#end_python:
+
+## Antenna 1
+#python:
+x, y, z_base = antenna_positions[0]
+gp_z1, gp_z2 = z_base - gp_thickness/2, z_base + gp_thickness/2
+mono_top = gp_z2 + monopole_length
+print(f'#box: {x-gp_half_size} {y-gp_half_size} {gp_z1} {x+gp_half_size} {y+gp_half_size} {gp_z2} pec')
+print(f'#cylinder: {x} {y} {gp_z2} {x} {y} {mono_top} {wire_radius} pec')
+print(f'#transmission_line: z {x} {y} {gp_z2} 50 tx_pulse')
+#end_python:
+
+## Antenna 2
+#python:
+x, y, z_base = antenna_positions[1]
+gp_z1, gp_z2 = z_base - gp_thickness/2, z_base + gp_thickness/2
+mono_top = gp_z2 + monopole_length
+print(f'#box: {x-gp_half_size} {y-gp_half_size} {gp_z1} {x+gp_half_size} {y+gp_half_size} {gp_z2} pec')
+print(f'#cylinder: {x} {y} {gp_z2} {x} {y} {mono_top} {wire_radius} pec')
+print(f'#transmission_line: z {x} {y} {gp_z2} 50')
+#end_python:
+
+## Antenna 3
+#python:
+x, y, z_base = antenna_positions[2]
+gp_z1, gp_z2 = z_base - gp_thickness/2, z_base + gp_thickness/2
+mono_top = gp_z2 + monopole_length
+print(f'#box: {x-gp_half_size} {y-gp_half_size} {gp_z1} {x+gp_half_size} {y+gp_half_size} {gp_z2} pec')
+print(f'#cylinder: {x} {y} {gp_z2} {x} {y} {mono_top} {wire_radius} pec')
+print(f'#transmission_line: z {x} {y} {gp_z2} 50')
+#end_python:
+
+## Antenna 4
+#python:
+x, y, z_base = antenna_positions[3]
+gp_z1, gp_z2 = z_base - gp_thickness/2, z_base + gp_thickness/2
+mono_top = gp_z2 + monopole_length
+print(f'#box: {x-gp_half_size} {y-gp_half_size} {gp_z1} {x+gp_half_size} {y+gp_half_size} {gp_z2} pec')
+print(f'#cylinder: {x} {y} {gp_z2} {x} {y} {mono_top} {wire_radius} pec')
+print(f'#transmission_line: z {x} {y} {gp_z2} 50')
+#end_python:
+
+## Antenna 5
+#python:
+x, y, z_base = antenna_positions[4]
+gp_z1, gp_z2 = z_base - gp_thickness/2, z_base + gp_thickness/2
+mono_top = gp_z2 + monopole_length
+print(f'#box: {x-gp_half_size} {y-gp_half_size} {gp_z1} {x+gp_half_size} {y+gp_half_size} {gp_z2} pec')
+print(f'#cylinder: {x} {y} {gp_z2} {x} {y} {mono_top} {wire_radius} pec')
+print(f'#transmission_line: z {x} {y} {gp_z2} 50')
+#end_python:
+
+## Antenna 6
+#python:
+x, y, z_base = antenna_positions[5]
+gp_z1, gp_z2 = z_base - gp_thickness/2, z_base + gp_thickness/2
+mono_top = gp_z2 + monopole_length
+print(f'#box: {x-gp_half_size} {y-gp_half_size} {gp_z1} {x+gp_half_size} {y+gp_half_size} {gp_z2} pec')
+print(f'#cylinder: {x} {y} {gp_z2} {x} {y} {mono_top} {wire_radius} pec')
+print(f'#transmission_line: z {x} {y} {gp_z2} 50')
+#end_python:
+
+## Antenna 7
+#python:
+x, y, z_base = antenna_positions[6]
+gp_z1, gp_z2 = z_base - gp_thickness/2, z_base + gp_thickness/2
+mono_top = gp_z2 + monopole_length
+print(f'#box: {x-gp_half_size} {y-gp_half_size} {gp_z1} {x+gp_half_size} {y+gp_half_size} {gp_z2} pec')
+print(f'#cylinder: {x} {y} {gp_z2} {x} {y} {mono_top} {wire_radius} pec')
+print(f'#transmission_line: z {x} {y} {gp_z2} 50')
+#end_python:
+
+## Antenna 8
+#python:
+x, y, z_base = antenna_positions[7]
+gp_z1, gp_z2 = z_base - gp_thickness/2, z_base + gp_thickness/2
+mono_top = gp_z2 + monopole_length
+print(f'#box: {x-gp_half_size} {y-gp_half_size} {gp_z1} {x+gp_half_size} {y+gp_half_size} {gp_z2} pec')
+print(f'#cylinder: {x} {y} {gp_z2} {x} {y} {mono_top} {wire_radius} pec')
+print(f'#transmission_line: z {x} {y} {gp_z2} 50')
+#end_python:
+
+## Antenna 9
+#python:
+x, y, z_base = antenna_positions[8]
+gp_z1, gp_z2 = z_base - gp_thickness/2, z_base + gp_thickness/2
+mono_top = gp_z2 + monopole_length
+print(f'#box: {x-gp_half_size} {y-gp_half_size} {gp_z1} {x+gp_half_size} {y+gp_half_size} {gp_z2} pec')
+print(f'#cylinder: {x} {y} {gp_z2} {x} {y} {mono_top} {wire_radius} pec')
+print(f'#transmission_line: z {x} {y} {gp_z2} 50')
+#end_python:
+
+## Antenna 10
+#python:
+x, y, z_base = antenna_positions[9]
+gp_z1, gp_z2 = z_base - gp_thickness/2, z_base + gp_thickness/2
+mono_top = gp_z2 + monopole_length
+print(f'#box: {x-gp_half_size} {y-gp_half_size} {gp_z1} {x+gp_half_size} {y+gp_half_size} {gp_z2} pec')
+print(f'#cylinder: {x} {y} {gp_z2} {x} {y} {mono_top} {wire_radius} pec')
+print(f'#transmission_line: z {x} {y} {gp_z2} 50')
+#end_python:
+
+## Antenna 11
+#python:
+x, y, z_base = antenna_positions[10]
+gp_z1, gp_z2 = z_base - gp_thickness/2, z_base + gp_thickness/2
+mono_top = gp_z2 + monopole_length
+print(f'#box: {x-gp_half_size} {y-gp_half_size} {gp_z1} {x+gp_half_size} {y+gp_half_size} {gp_z2} pec')
+print(f'#cylinder: {x} {y} {gp_z2} {x} {y} {mono_top} {wire_radius} pec')
+print(f'#transmission_line: z {x} {y} {gp_z2} 50')
+#end_python:
+
+## Antenna 12
+#python:
+x, y, z_base = antenna_positions[11]
+gp_z1, gp_z2 = z_base - gp_thickness/2, z_base + gp_thickness/2
+mono_top = gp_z2 + monopole_length
+print(f'#box: {x-gp_half_size} {y-gp_half_size} {gp_z1} {x+gp_half_size} {y+gp_half_size} {gp_z2} pec')
+print(f'#cylinder: {x} {y} {gp_z2} {x} {y} {mono_top} {wire_radius} pec')
+print(f'#transmission_line: z {x} {y} {gp_z2} 50')
+#end_python:
+
+## Antenna 13
+#python:
+x, y, z_base = antenna_positions[12]
+gp_z1, gp_z2 = z_base - gp_thickness/2, z_base + gp_thickness/2
+mono_top = gp_z2 + monopole_length
+print(f'#box: {x-gp_half_size} {y-gp_half_size} {gp_z1} {x+gp_half_size} {y+gp_half_size} {gp_z2} pec')
+print(f'#cylinder: {x} {y} {gp_z2} {x} {y} {mono_top} {wire_radius} pec')
+print(f'#transmission_line: z {x} {y} {gp_z2} 50')
+#end_python:
+
+## Antenna 14
+#python:
+x, y, z_base = antenna_positions[13]
+gp_z1, gp_z2 = z_base - gp_thickness/2, z_base + gp_thickness/2
+mono_top = gp_z2 + monopole_length
+print(f'#box: {x-gp_half_size} {y-gp_half_size} {gp_z1} {x+gp_half_size} {y+gp_half_size} {gp_z2} pec')
+print(f'#cylinder: {x} {y} {gp_z2} {x} {y} {mono_top} {wire_radius} pec')
+print(f'#transmission_line: z {x} {y} {gp_z2} 50')
+#end_python:
+
+## Antenna 15
+#python:
+x, y, z_base = antenna_positions[14]
+gp_z1, gp_z2 = z_base - gp_thickness/2, z_base + gp_thickness/2
+mono_top = gp_z2 + monopole_length
+print(f'#box: {x-gp_half_size} {y-gp_half_size} {gp_z1} {x+gp_half_size} {y+gp_half_size} {gp_z2} pec')
+print(f'#cylinder: {x} {y} {gp_z2} {x} {y} {mono_top} {wire_radius} pec')
+print(f'#transmission_line: z {x} {y} {gp_z2} 50')
+#end_python:
+
+## Antenna 16
+#python:
+x, y, z_base = antenna_positions[15]
+gp_z1, gp_z2 = z_base - gp_thickness/2, z_base + gp_thickness/2
+mono_top = gp_z2 + monopole_length
+print(f'#box: {x-gp_half_size} {y-gp_half_size} {gp_z1} {x+gp_half_size} {y+gp_half_size} {gp_z2} pec')
+print(f'#cylinder: {x} {y} {gp_z2} {x} {y} {mono_top} {wire_radius} pec')
+print(f'#transmission_line: z {x} {y} {gp_z2} 50')
+#end_python:
+

@@ -4,6 +4,7 @@
 *.s16p
 *.s1p
 *.s2p
+/brain_inputs
 
 # Python cache
 __pycache__/

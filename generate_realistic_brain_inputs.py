@@ -210,12 +210,13 @@ for src_idx in range(n_antennas):
             f.write("print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')\n")
             f.write("print(f'#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec')\n")
             
-            # Use voltage_source for GPU compatibility (transmission_line not supported on GPU)
+            # Use transmission_line for accurate S-parameter extraction (CPU only)
             if is_transmitter:
-                f.write("print(f'#voltage_source: z {x} {y} {feed_z} 50 tx_pulse')\n")
+                f.write("print(f'#transmission_line: z {x} {y} {feed_z} 50 tx_pulse')\n")
+            else:
+                # Non-transmit antennas terminated with 50 Ohm
+                f.write("print(f'#transmission_line: z {x} {y} {feed_z} 50')\n")
             
-            # Add receiver at every antenna position (for multi-static S-parameter extraction)
-            f.write(f"print(f'#rx: {{x}} {{y}} {{feed_z}}')\n")
             f.write("#end_python:\n")
         
         f.write(f"\n## End of input file\n")
