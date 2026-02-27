@@ -297,8 +297,8 @@ for src_idx in range(n_antennas):
             if is_transmitter:
                 f.write("print(f'#transmission_line: z {x} {y} {feed_z} 50 tx_pulse')\n")
             else:
-                # Non-transmit antennas terminated with 50 Ohm (need dummy 6th parameter)
-                f.write("print(f'#transmission_line: z {x} {y} {feed_z} 50 0')\n")
+                # Non-transmit antennas: terminated with 50 Ohm (pass resistance twice for termination)
+                f.write("print(f'#transmission_line: z {x} {y} {feed_z} 50 50')\n")
             
             f.write("#end_python:\n")
         
