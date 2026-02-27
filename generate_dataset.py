@@ -99,7 +99,6 @@ def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
             f.write("#domain: 0.6 0.6 0.6\n")
             f.write("#dx_dy_dz: 0.002 0.002 0.002\n")
             f.write("#time_window: 15e-9\n\n")
-            f.write("#waveform: gaussian 1 1e9 tx_pulse\n\n")
             
             # Materials
             f.write("## Materials\n")
@@ -166,6 +165,11 @@ def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
                 f.write(f"## Hemorrhage\n#sphere: {lx} {ly} {lz} {lesion_size} blood\n\n")
             
             # Antennas
+            # In gprMax 3.1.7, every #transmission_line requires a waveform ID.
+            # Receivers use a zero-amplitude waveform so they inject no energy.
+            f.write("## Waveforms\n")
+            f.write(f"#waveform: gaussian 1 1e9 tx_pulse\n")
+            f.write(f"#waveform: gaussian 0 1e9 rx_null\n\n")
             f.write("## Antennas\n#python:\n")
             f.write("import math\n")
             f.write(f"monopole_length, wire_radius = {monopole_length}, {wire_radius}\n")
@@ -188,10 +192,11 @@ def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
                 f.write("print(f'#box: {x-gp_half_size} {y-gp_half_size} {gp_z1} {x+gp_half_size} {y+gp_half_size} {gp_z2} pec')\n")
                 f.write("print(f'#cylinder: {x} {y} {gp_z2} {x} {y} {mono_top} {wire_radius} pec')\n")
                 if ant_idx == src_idx:
+                    # Transmitter: active waveform (amplitude 1)
                     f.write("print(f'#transmission_line: z {x} {y} {gp_z2} 50 tx_pulse')\n")
                 else:
-                    # Receivers: terminated transmission line (no source)
-                    f.write("print(f'#transmission_line: z {x} {y} {gp_z2} 50 50')\n")
+                    # Receivers: zero-amplitude waveform (measures signal, injects nothing)
+                    f.write("print(f'#transmission_line: z {x} {y} {gp_z2} 50 rx_null')\n")
                 f.write("#end_python:\n\n")
 
 # ============================================================================

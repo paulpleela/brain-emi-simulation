@@ -111,8 +111,10 @@ for src_idx in range(n_antennas):
         f.write(f"#time_window: 15e-9\n\n")
         
         # Waveforms - Gaussian centered at 1 GHz for 0-2 GHz bandwidth
+        # rx_null: zero-amplitude waveform required for receiver transmission lines
         f.write(f"## Waveforms (optimized for 0-2 GHz)\n")
-        f.write(f"#waveform: gaussian 1 1e9 tx_pulse\n\n")
+        f.write(f"#waveform: gaussian 1 1e9 tx_pulse\n")
+        f.write(f"#waveform: gaussian 0 1e9 rx_null\n\n")
         
         # Materials
         f.write(f"## Materials\n")
@@ -297,8 +299,8 @@ for src_idx in range(n_antennas):
             if is_transmitter:
                 f.write("print(f'#transmission_line: z {x} {y} {feed_z} 50 tx_pulse')\n")
             else:
-                # Non-transmit antennas: terminated with 50 Ohm (pass resistance twice for termination)
-                f.write("print(f'#transmission_line: z {x} {y} {feed_z} 50 50')\n")
+                # Receivers: zero-amplitude waveform (measures signal, injects nothing)
+                f.write("print(f'#transmission_line: z {x} {y} {feed_z} 50 rx_null')\n")
             
             f.write("#end_python:\n")
         
