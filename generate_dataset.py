@@ -190,7 +190,7 @@ def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
                 if ant_idx == src_idx:
                     f.write("print(f'#transmission_line: z {x} {y} {gp_z2} 50 tx_pulse')\n")
                 else:
-                    f.write("print(f'#transmission_line: z {x} {y} {gp_z2} 50')\n")
+                    f.write("print(f'#transmission_line: z {x} {y} {gp_z2} 50 0')\n")
                 f.write("#end_python:\n\n")
 
 # ============================================================================

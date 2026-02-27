@@ -54,33 +54,34 @@ cd ~/brain-emi-simulation
 git pull origin main
 ```
 
-### Create Conda Environment:
+### Clone and Install gprMax:
 
 ```bash
-# Load conda module (if needed on Rangpur)
-module load anaconda3  # or conda, check with: module avail
+# Clone official gprMax (not included in our repo)
+cd ~/brain-emi-simulation
+git clone https://github.com/gprMax/gprMax.git
 
-# Create gprMax environment
+# Navigate to gprMax directory
 cd gprMax
+
+# Create conda environment
 conda env create -f conda_env.yml
 
-# This creates an environment named "gprMax" with all dependencies
-```
-
-### Build gprMax:
-
-```bash
-# Activate the environment
+# Activate environment
 conda activate gprmax
 
-# Build gprMax
-cd ~/brain-emi-simulation/gprMax
+# Build and install gprMax (takes 5-10 minutes)
 python setup.py build
 python setup.py install
 
 # Verify installation
 python -c "import gprMax; print('gprMax installed successfully!')"
+
+# Return to project root
+cd ~/brain-emi-simulation
 ```
+
+**Expected output**: `gprMax installed successfully!`
 
 ---
 
