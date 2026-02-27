@@ -14,19 +14,11 @@
 # Runs max 16 parallel jobs at once
 # Uses #transmission_line for accurate S-parameter extraction
 #
-# IMPORTANT: Adjust --array parameter based on batch:
-#   Batch 1 (healthy): --array=1-160%16     (10 scenarios × 16 files)
-#   Batch 2 (hemorrhage): --array=1-512%16  (32 scenarios × 16 files)
-#   Batch 3 (rotation): --array=1-160%16    (10 scenarios × 16 files)
-#
 # Usage:
-#   1. Generate inputs: python generate_inputs.py
-#   2. Upload brain_inputs/ to HPC
-#   3. Create logs/ directory: mkdir -p logs
-#   4. Edit --array parameter above for current batch
-#   5. Submit: sbatch run_simulation.sh
-#   6. Monitor: squeue -u $USER
-#   7. Download .out files for S-parameter extraction
+#   1. Generate inputs: python generate_dataset.py
+#   2. Create logs/ directory: mkdir -p logs
+#   3. Submit full dataset: sbatch run_simulation.sh
+#   4. Monitor: squeue -u $USER
 
 echo "========================================"
 echo "gprMax Brain EMI Simulation"
@@ -72,8 +64,11 @@ echo ""
 echo "Running gprMax on CPU with $SLURM_CPUS_PER_TASK threads..."
 echo ""
 
-# Run gprMax on CPU using multiple threads
-python -m gprMax "$INPUT_FILE" -n $SLURM_CPUS_PER_TASK
+# Set OpenMP threads to match allocated CPUs
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+
+# Run gprMax (-n 1 = single model run; threads controlled by OMP_NUM_THREADS)
+python -m gprMax "$INPUT_FILE" -n 1
 
 # Check if simulation completed successfully
 OUTPUT_FILE="${INPUT_FILE%.in}.out"
