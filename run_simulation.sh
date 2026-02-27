@@ -1,24 +1,32 @@
 #!/bin/bash
-#SBATCH --job-name=gprmax_brain_cpu
+#SBATCH --job-name=gprmax_brain
 #SBATCH --output=logs/sim_%a.out
 #SBATCH --error=logs/sim_%a.err
-#SBATCH --array=1-4800%16
+#SBATCH --array=1-1000%16
 #SBATCH --partition=cpu
 #SBATCH --time=01:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 
 # CPU-based HPC job array script for gprMax brain imaging on Rangpur
-# 300 scenarios x 16 transmit antennas = 4800 jobs
+# 300 scenarios x 16 transmit antennas = 4800 jobs total
+# Submit in 5 batches of 1000 (most clusters cap arrays at 1000):
+#   Batch 1: --array=1-1000%16
+#   Batch 2: --array=1001-2000%16
+#   Batch 3: --array=2001-3000%16
+#   Batch 4: --array=3001-4000%16
+#   Batch 5: --array=4001-4800%16
 # Expected runtime: 45-60 min per job
-# Runs max 16 parallel jobs at once
-# Uses #transmission_line for accurate S-parameter extraction
 #
 # Usage:
-#   1. Generate inputs: python generate_dataset.py
-#   2. Create logs/ directory: mkdir -p logs
-#   3. Submit full dataset: sbatch run_simulation.sh
-#   4. Monitor: squeue -u $USER
+#   conda activate gprmax
+#   python generate_dataset.py
+#   mkdir -p logs
+#   sbatch run_simulation.sh                        # batch 1 (1-1000)
+#   sbatch --array=1001-2000%16 run_simulation.sh   # batch 2
+#   sbatch --array=2001-3000%16 run_simulation.sh   # batch 3
+#   sbatch --array=3001-4000%16 run_simulation.sh   # batch 4
+#   sbatch --array=4001-4800%16 run_simulation.sh   # batch 5
 
 echo "========================================"
 echo "gprMax Brain EMI Simulation"
@@ -28,19 +36,12 @@ echo "Start time: $(date)"
 echo "========================================"
 echo ""
 
-# Activate conda environment
-if command -v conda >/dev/null 2>&1; then
-    # If conda is available in PATH, activate directly
-    conda activate gprmax || true
-else
-    # Fallback: source common conda profile locations then activate
-    if [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
-        . "$HOME/miniconda3/etc/profile.d/conda.sh"
-    elif [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
-        . "$HOME/anaconda3/etc/profile.d/conda.sh"
-    fi
-    conda activate gprmax || true
-fi
+# Activate conda environment (robust method for SLURM non-interactive shells)
+source "$HOME/miniconda3/etc/profile.d/conda.sh"
+conda activate gprmax
+
+# Use the conda env Python directly as a fallback
+PYTHON="$HOME/miniconda3/envs/gprmax/bin/python"
 
 # Find input file based on array task ID
 INPUT_DIR="brain_inputs"
@@ -68,7 +69,7 @@ echo ""
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
 # Run gprMax (-n 1 = single model run; threads controlled by OMP_NUM_THREADS)
-python -m gprMax "$INPUT_FILE" -n 1
+$PYTHON -m gprMax "$INPUT_FILE" -n 1
 
 # Check if simulation completed successfully
 OUTPUT_FILE="${INPUT_FILE%.in}.out"
