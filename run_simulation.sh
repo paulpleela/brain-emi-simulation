@@ -85,34 +85,43 @@ else
 fi
 
 # ── Per-scenario S-parameter extraction ──────────────────────────────────────
-# Extract the scenario number from the filename (e.g. scenario_042_tx07.in → 42)
-SCENARIO_NUM=$(echo "$INPUT_FILE" | grep -oP '(?<=scenario_)\d+' | sed 's/^0*//')
+# Parse scenario number directly from filename (e.g. brain_inputs/scenario_042_tx07.in → 042)
+BASENAME=$(basename "$INPUT_FILE")                         # scenario_042_tx07.in
+SCENARIO_PAD=$(echo "$BASENAME" | cut -d_ -f2)            # 042  (zero-padded)
+SCENARIO_NUM=$(echo "$SCENARIO_PAD" | sed 's/^0*//')      # 42   (plain integer)
+
+echo ""
+echo "Checking if all 16 .out files ready for scenario ${SCENARIO_PAD}..."
 
 # Check if ALL 16 .out files for this scenario now exist
 ALL_DONE=true
-for tx in $(seq -w 01 16); do
-    if [ ! -f "${INPUT_DIR}/scenario_$(printf '%03d' $SCENARIO_NUM)_tx${tx}.out" ]; then
+MISSING_COUNT=0
+for tx in 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16; do
+    EXPECTED="${INPUT_DIR}/scenario_${SCENARIO_PAD}_tx${tx}.out"
+    if [ ! -f "$EXPECTED" ]; then
         ALL_DONE=false
-        break
+        MISSING_COUNT=$((MISSING_COUNT + 1))
     fi
 done
 
 if [ "$ALL_DONE" = true ]; then
-    echo ""
-    echo "All 16 .out files ready for scenario ${SCENARIO_NUM} — extracting S-parameters..."
+    echo "All 16 .out files present — extracting S-parameters for scenario ${SCENARIO_PAD}..."
     mkdir -p sparams
 
-    # Use a lockfile so only one job runs extraction if two jobs finish near-simultaneously
-    LOCKFILE="/tmp/extract_scenario_$(printf '%03d' $SCENARIO_NUM).lock"
+    # Lockfile prevents two near-simultaneous jobs both running extraction
+    LOCKFILE="/tmp/extract_scenario_${SCENARIO_PAD}.lock"
     (
-        flock -n 200 || { echo "Another job already extracting scenario ${SCENARIO_NUM}, skipping."; exit 0; }
-        $PYTHON extract_sparameters.py --scenario $SCENARIO_NUM
+        flock -n 200 || { echo "Another job already extracting scenario ${SCENARIO_PAD}, skipping."; exit 0; }
+        $PYTHON extract_sparameters.py --scenario $SCENARIO_NUM --no-delete
+        EXIT_CODE=$?
+        if [ $EXIT_CODE -ne 0 ]; then
+            echo "✗ ERROR: extract_sparameters.py failed with exit code $EXIT_CODE"
+        else
+            echo "✓ S-parameter extraction complete: sparams/scenario_${SCENARIO_PAD}.s16p"
+        fi
     ) 200>"$LOCKFILE"
-
-    echo "✓ Extraction complete for scenario ${SCENARIO_NUM}"
 else
-    echo ""
-    echo "Scenario ${SCENARIO_NUM}: waiting for remaining tx jobs before extraction."
+    echo "Scenario ${SCENARIO_PAD}: ${MISSING_COUNT}/16 .out files still missing — skipping extraction for now."
 fi
 
 echo ""

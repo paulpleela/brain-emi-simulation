@@ -37,7 +37,7 @@ OUTPUT_DIR  = "sparams"         # where .s16p files will be saved
 N_PORTS     = 16
 Z0          = 50.0              # reference impedance (Ohms)
 F_MAX       = 2e9               # max frequency to keep (Hz)
-DELETE_OUT  = True              # delete .out files after successful extraction
+DELETE_OUT  = False              # delete .out files after successful extraction
 
 
 # ============================================================================
@@ -257,7 +257,14 @@ def main():
                        help="Process all scenarios (1-300)")
     group.add_argument("--range",    type=int, nargs=2, metavar=("START", "END"),
                        help="Process scenarios START to END (inclusive)")
+    parser.add_argument("--no-delete", action="store_true",
+                        help="Keep .out files after extraction (default: delete them)")
     args = parser.parse_args()
+
+    # Override global DELETE_OUT if --no-delete passed
+    global DELETE_OUT
+    if args.no_delete:
+        DELETE_OUT = False
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
