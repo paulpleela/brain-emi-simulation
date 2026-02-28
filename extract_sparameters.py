@@ -66,8 +66,10 @@ def read_tl_data(hdf5_path):
             # gprMax names them tl1, tl2, ... in the order they were defined
             idx = int(name.replace('tl', ''))
             tls[idx] = {
-                'V': f['tls'][name]['V'][:],
-                'I': f['tls'][name]['I'][:]
+                'Vinc':   f['tls'][name]['Vinc'][:],
+                'Vtotal': f['tls'][name]['Vtotal'][:],
+                'Iinc':   f['tls'][name]['Iinc'][:],
+                'Itotal': f['tls'][name]['Itotal'][:]
             }
 
     return tls, dt, n_it
@@ -113,19 +115,29 @@ def compute_s_matrix(scenario_id):
             S         = np.zeros((N_PORTS, N_PORTS, n_freq), dtype=complex)
 
         # Incident wave at the active transmitter port (column j = tx-1)
-        V_tx = np.fft.rfft(tls[tx]['V'])[freq_mask]
-        I_tx = np.fft.rfft(tls[tx]['I'])[freq_mask]
-        a_j  = (V_tx + Z0 * I_tx) / (2.0 * np.sqrt(Z0))
+        # gprMax stores Vinc/Iinc directly — use these for the incident wave
+        Vinc_tx = np.fft.rfft(tls[tx]['Vinc'])[freq_mask]
+        Iinc_tx = np.fft.rfft(tls[tx]['Iinc'])[freq_mask]
+
+        # Incident wave amplitude: a_j = Vinc / sqrt(Z0)
+        # (gprMax Vinc is already the forward-travelling voltage wave)
+        a_j = Vinc_tx / np.sqrt(Z0)
 
         # Scattered wave at every port (row i)
         for rx in range(1, N_PORTS + 1):
             if rx not in tls:
                 continue
-            V_rx = np.fft.rfft(tls[rx]['V'])[freq_mask]
-            I_rx = np.fft.rfft(tls[rx]['I'])[freq_mask]
-            b_i  = (V_rx - Z0 * I_rx) / (2.0 * np.sqrt(Z0))
 
-            # Avoid divide-by-zero at DC or near-zero incident wave
+            if rx == tx:
+                # Reflection: b_i = Vrefl = Vtotal - Vinc
+                Vrefl = np.fft.rfft(tls[rx]['Vtotal'] - tls[rx]['Vinc'])[freq_mask]
+                b_i   = Vrefl / np.sqrt(Z0)
+            else:
+                # Transmission: at matched receivers Vtotal ≈ transmitted wave
+                Vtx = np.fft.rfft(tls[rx]['Vtotal'])[freq_mask]
+                b_i  = Vtx / np.sqrt(Z0)
+
+            # S_ij = b_i / a_j
             with np.errstate(divide='ignore', invalid='ignore'):
                 S[rx-1, tx-1, :] = np.where(np.abs(a_j) > 1e-30, b_i / a_j, 0.0)
 
