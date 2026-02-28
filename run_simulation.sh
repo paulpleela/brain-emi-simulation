@@ -84,6 +84,37 @@ else
     exit 1
 fi
 
+# ── Per-scenario S-parameter extraction ──────────────────────────────────────
+# Extract the scenario number from the filename (e.g. scenario_042_tx07.in → 42)
+SCENARIO_NUM=$(echo "$INPUT_FILE" | grep -oP '(?<=scenario_)\d+' | sed 's/^0*//')
+
+# Check if ALL 16 .out files for this scenario now exist
+ALL_DONE=true
+for tx in $(seq -w 01 16); do
+    if [ ! -f "${INPUT_DIR}/scenario_$(printf '%03d' $SCENARIO_NUM)_tx${tx}.out" ]; then
+        ALL_DONE=false
+        break
+    fi
+done
+
+if [ "$ALL_DONE" = true ]; then
+    echo ""
+    echo "All 16 .out files ready for scenario ${SCENARIO_NUM} — extracting S-parameters..."
+    mkdir -p sparams
+
+    # Use a lockfile so only one job runs extraction if two jobs finish near-simultaneously
+    LOCKFILE="/tmp/extract_scenario_$(printf '%03d' $SCENARIO_NUM).lock"
+    (
+        flock -n 200 || { echo "Another job already extracting scenario ${SCENARIO_NUM}, skipping."; exit 0; }
+        $PYTHON extract_sparameters.py --scenario $SCENARIO_NUM
+    ) 200>"$LOCKFILE"
+
+    echo "✓ Extraction complete for scenario ${SCENARIO_NUM}"
+else
+    echo ""
+    echo "Scenario ${SCENARIO_NUM}: waiting for remaining tx jobs before extraction."
+fi
+
 echo ""
 echo "End time: $(date)"
 echo "========================================"

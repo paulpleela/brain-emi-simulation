@@ -8,17 +8,10 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #
-# Extracts S-parameters for all 300 scenarios and saves as .s16p
-# Run AFTER all simulation batches are complete:
+# FALLBACK ONLY: S-parameter extraction is normally triggered automatically
+# inside run_simulation.sh as each scenario's 16 jobs complete.
 #
-#   JOB1=$(sbatch --array=1-1000%16    run_simulation.sh | awk '{print $4}')
-#   JOB2=$(sbatch --array=1001-2000%16 run_simulation.sh | awk '{print $4}')
-#   JOB3=$(sbatch --array=2001-3000%16 run_simulation.sh | awk '{print $4}')
-#   JOB4=$(sbatch --array=3001-4000%16 run_simulation.sh | awk '{print $4}')
-#   JOB5=$(sbatch --array=4001-4800%16 run_simulation.sh | awk '{print $4}')
-#   sbatch --dependency=afterok:$JOB1:$JOB2:$JOB3:$JOB4:$JOB5 extract_sparameters.sh
-#
-# Or run manually after all jobs complete:
+# Use this script only to re-extract or catch any scenarios that were missed:
 #   sbatch extract_sparameters.sh
 
 echo "========================================"
