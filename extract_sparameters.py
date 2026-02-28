@@ -83,13 +83,21 @@ def compute_s_matrix(scenario_id):
     """
     Build the full 16x16 S-matrix for one scenario.
 
-    Column j of S comes from the simulation where antenna j is the transmitter
-    (file scenario_XXX_txJJ.out). Each .out has all 16 TLs recorded.
+    In each simulation file scenario_XXX_txJJ.out, antenna J is the transmitter
+    and antennas 1-16 are all recorded. gprMax stores:
+        Vinc   = forward-travelling (incident) voltage on the TL
+        Vtotal = total voltage = Vinc + Vrefl  (at transmitter)
+                               = transmitted signal (at receivers, since Vinc=0 there)
 
-    S_ij(f) = b_i(f) / a_j(f)
-    where:
-        a_j = (V_j + Z0*I_j) / (2*sqrt(Z0))   incident wave (transmitter port)
-        b_i = (V_i - Z0*I_i) / (2*sqrt(Z0))   scattered wave (all ports)
+    S_ij = scattered wave at port i / incident wave at port j
+
+    For the transmitter port (i == j):
+        Vrefl = Vtotal - Vinc   (reflected wave)
+        S_jj  = Vrefl / Vinc
+
+    For receiver ports (i != j):
+        Vtotal_i = transmitted signal arriving at port i (Vinc=0 there)
+        S_ij = Vtotal_i / Vinc_j   (normalise by transmitter incident wave)
 
     Returns:
         S      : ndarray  (N_PORTS, N_PORTS, n_freq_keep)  complex
@@ -97,6 +105,7 @@ def compute_s_matrix(scenario_id):
     """
     S      = None
     freqs  = None
+    freq_mask = None
 
     for tx in range(1, N_PORTS + 1):
         fname = os.path.join(INPUT_DIR, f"scenario_{scenario_id:03d}_tx{tx:02d}.out")
@@ -114,32 +123,28 @@ def compute_s_matrix(scenario_id):
             n_freq    = len(freqs)
             S         = np.zeros((N_PORTS, N_PORTS, n_freq), dtype=complex)
 
-        # Incident wave at the active transmitter port (column j = tx-1)
-        # gprMax stores Vinc/Iinc directly — use these for the incident wave
-        Vinc_tx = np.fft.rfft(tls[tx]['Vinc'])[freq_mask]
-        Iinc_tx = np.fft.rfft(tls[tx]['Iinc'])[freq_mask]
+        # ── Reference: incident wave at the active transmitter port ──────────
+        # Vinc from the tx port is the only meaningful incident wave in this sim
+        Vinc_j = np.fft.rfft(tls[tx]['Vinc'])[freq_mask]   # incident at tx port
 
-        # Incident wave amplitude: a_j = Vinc / sqrt(Z0)
-        # (gprMax Vinc is already the forward-travelling voltage wave)
-        a_j = Vinc_tx / np.sqrt(Z0)
+        # Avoid divide-by-zero where incident wave is negligible (DC, far edges)
+        safe = np.abs(Vinc_j) > 1e-30
 
-        # Scattered wave at every port (row i)
+        # ── Column j of S-matrix ─────────────────────────────────────────────
         for rx in range(1, N_PORTS + 1):
             if rx not in tls:
                 continue
 
             if rx == tx:
-                # Reflection: b_i = Vrefl = Vtotal - Vinc
-                Vrefl = np.fft.rfft(tls[rx]['Vtotal'] - tls[rx]['Vinc'])[freq_mask]
-                b_i   = Vrefl / np.sqrt(Z0)
+                # S_jj (reflection): Vrefl = Vtotal - Vinc
+                Vtotal = np.fft.rfft(tls[rx]['Vtotal'])[freq_mask]
+                Vrefl  = Vtotal - Vinc_j
+                S[rx-1, tx-1, :] = np.where(safe, Vrefl / Vinc_j, 0.0)
             else:
-                # Transmission: at matched receivers Vtotal ≈ transmitted wave
-                Vtx = np.fft.rfft(tls[rx]['Vtotal'])[freq_mask]
-                b_i  = Vtx / np.sqrt(Z0)
-
-            # S_ij = b_i / a_j
-            with np.errstate(divide='ignore', invalid='ignore'):
-                S[rx-1, tx-1, :] = np.where(np.abs(a_j) > 1e-30, b_i / a_j, 0.0)
+                # S_ij (transmission): Vtotal at receiver = transmitted signal
+                # (receiver Vinc = 0 since rx_null waveform has zero amplitude)
+                Vtotal_rx = np.fft.rfft(tls[rx]['Vtotal'])[freq_mask]
+                S[rx-1, tx-1, :] = np.where(safe, Vtotal_rx / Vinc_j, 0.0)
 
     return S, freqs
 
