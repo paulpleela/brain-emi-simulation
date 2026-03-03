@@ -164,15 +164,21 @@ def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
                 lz = head_center[2] + lesion_pos[2]
                 f.write(f"## Hemorrhage\n#sphere: {lx} {ly} {lz} {lesion_size} blood\n\n")
             
-            # Antennas: z-directed monopoles in equatorial plane
-            # - All 16 antennas sit at (cx_snap, cy_snap, head_center_z)
-            # - Positions snapped to 2mm grid (max error <1.4mm)
-            # - GP: horizontal PEC disc, axis along z, below the feed
-            #   GP bottom = head_center_z - gp_thickness, top = head_center_z
-            # - Feed: (cx_snap, cy_snap, head_center_z + cell)  [one cell above GP top]
-            # - Monopole: feed_z to feed_z + monopole_length  (pointing up)
-            # - TL polarisation: always 'z'
-            # This avoids all grid-snapping/polarisation issues of radial monopoles.
+            # Antennas: z-directed monopoles ABOVE the head (not at equatorial plane)
+            # The head top z = head_center[2] + c + scalp + coupling = 0.25+0.115+0.01+0.005 = 0.38m
+            # Antennas are placed above this, in free space:
+            #   GP bottom = head_top + cell  (one cell gap above coupling layer)
+            #   GP top    = GP bottom + gp_thickness
+            #   Feed      = GP top + cell    (one cell gap above GP)
+            #   Tip       = Feed + monopole_length (pointing up, in free space)
+            # XY positions snapped to 2mm grid; TL polarisation always 'z'.
+            c_ax = head_semi_axes['c']
+            head_top_z = head_center[2] + c_ax + scalp_skull_thickness + coupling_thickness
+            gp_bot_z  = round((head_top_z + gp_thickness) / gp_thickness) * gp_thickness
+            gp_top_z  = gp_bot_z + gp_thickness
+            feed_z_val = gp_top_z + gp_thickness   # gp_thickness == cell == 0.002
+            tip_z_val  = feed_z_val + monopole_length
+
             f.write("## Waveforms\n")
             f.write(f"#waveform: gaussian 1 1e9 tx_pulse\n")
             f.write(f"#waveform: gaussian 0 1e9 rx_null\n\n")
@@ -181,34 +187,34 @@ def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
             f.write(f"monopole_length = {monopole_length}\n")
             f.write(f"wire_radius     = {wire_radius}\n")
             f.write(f"gp_half_size    = {gp_half_size}\n")
-            f.write(f"gp_thickness    = {gp_thickness}\n")
             f.write(f"cell            = 0.002\n")
             f.write(f"n_antennas      = {n_antennas}\n")
-            f.write("antenna_positions = []\n")
+            f.write(f"head_center = ({head_center[0]}, {head_center[1]}, {head_center[2]})\n")
+            f.write(f"a = {head_semi_axes['a']}\n")
+            f.write(f"b = {head_semi_axes['b']}\n")
+            f.write(f"scalp_thickness    = {scalp_skull_thickness}\n")
+            f.write(f"coupling_thickness = {coupling_thickness}\n")
+            f.write(f"# Antenna z-coords (all antennas share same z, above head top)\n")
+            f.write(f"gp_bot  = {gp_bot_z:.4f}  # GP disc bottom\n")
+            f.write(f"gp_top  = {gp_top_z:.4f}  # GP disc top\n")
+            f.write(f"feed_z  = {feed_z_val:.4f}  # TL feed point\n")
+            f.write(f"tip_z   = {tip_z_val:.4f}  # Monopole tip\n")
+            f.write("antenna_xy = []\n")
             f.write("for i in range(n_antennas):\n")
             f.write("    angle = 2 * math.pi * i / n_antennas\n")
-            f.write(f"    r_x = a + scalp_thickness + coupling_thickness + cell\n")
-            f.write(f"    r_y = b + scalp_thickness + coupling_thickness + cell\n")
-            f.write("    # Snap to nearest grid point\n")
+            f.write("    r_x = a + scalp_thickness + coupling_thickness + cell\n")
+            f.write("    r_y = b + scalp_thickness + coupling_thickness + cell\n")
             f.write("    cx = round((head_center[0] + r_x * math.cos(angle)) / cell) * cell\n")
             f.write("    cy = round((head_center[1] + r_y * math.sin(angle)) / cell) * cell\n")
-            f.write("    cz = head_center[2]\n")
-            f.write("    # GP disc: horizontal, axis=z, from cz-gp_thickness to cz\n")
-            f.write("    gp_bot = cz - gp_thickness\n")
-            f.write("    gp_top = cz\n")
-            f.write("    # Feed: one cell above GP top\n")
-            f.write("    feed_z = gp_top + cell\n")
-            f.write("    # Monopole tip\n")
-            f.write("    tip_z  = feed_z + monopole_length\n")
-            f.write("    antenna_positions.append((cx, cy, cz, gp_bot, gp_top, feed_z, tip_z))\n")
+            f.write("    antenna_xy.append((cx, cy))\n")
             f.write("#end_python:\n\n")
 
             for ant_idx in range(n_antennas):
                 f.write(f"## Antenna {ant_idx+1}\n#python:\n")
-                f.write(f"cx, cy, cz, gp_bot, gp_top, feed_z, tip_z = antenna_positions[{ant_idx}]\n")
-                f.write("# GP: horizontal PEC disc (cylinder, axis=z)\n")
+                f.write(f"cx, cy = antenna_xy[{ant_idx}]\n")
+                f.write("# GP: horizontal PEC disc (cylinder axis=z), above head\n")
                 f.write("print(f'#cylinder: {cx} {cy} {gp_bot} {cx} {cy} {gp_top} {gp_half_size} pec')\n")
-                f.write("# Monopole: vertical PEC wire from feed to tip\n")
+                f.write("# Monopole: vertical PEC wire from feed upward\n")
                 f.write("print(f'#cylinder: {cx} {cy} {feed_z} {cx} {cy} {tip_z} {wire_radius} pec')\n")
                 if ant_idx == src_idx:
                     f.write("print(f'#transmission_line: z {cx} {cy} {feed_z} 50 tx_pulse')\n")
