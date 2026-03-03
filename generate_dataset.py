@@ -167,6 +167,9 @@ def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
             # Antennas
             # In gprMax 3.1.7, every #transmission_line requires a waveform ID.
             # Receivers use a zero-amplitude waveform so they inject no energy.
+            # Monopoles point RADIALLY INWARD toward head center.
+            # Each antenna's feed axis (x or y) is chosen by dominant radial component.
+            # Ground plane is a PEC box on the outer side; monopole points inward.
             f.write("## Waveforms\n")
             f.write(f"#waveform: gaussian 1 1e9 tx_pulse\n")
             f.write(f"#waveform: gaussian 0 1e9 rx_null\n\n")
@@ -178,25 +181,46 @@ def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
             f.write("antenna_positions = []\n")
             f.write("for i in range(n_antennas):\n")
             f.write("    angle = 2 * math.pi * i / n_antennas\n")
-            f.write(f"    x = head_center[0] + (a + scalp_thickness + coupling_thickness + gp_half_size) * math.cos(angle)\n")
-            f.write(f"    y = head_center[1] + (b + scalp_thickness + coupling_thickness + gp_half_size) * math.sin(angle)\n")
-            f.write(f"    z = head_center[2]\n")
-            f.write("    antenna_positions.append((x, y, z))\n")
+            f.write("    # Radial distance from head center to ground plane outer face\n")
+            f.write(f"    r_x = a + scalp_thickness + coupling_thickness + gp_thickness\n")
+            f.write(f"    r_y = b + scalp_thickness + coupling_thickness + gp_thickness\n")
+            f.write("    # Ground plane centre position (on ellipse surface + gp_thickness offset)\n")
+            f.write("    cx = head_center[0] + r_x * math.cos(angle)\n")
+            f.write("    cy = head_center[1] + r_y * math.sin(angle)\n")
+            f.write("    cz = head_center[2]\n")
+            f.write("    # Inward radial unit vector\n")
+            f.write("    dx = head_center[0] - cx\n")
+            f.write("    dy = head_center[1] - cy\n")
+            f.write("    mag = math.sqrt(dx*dx + dy*dy)\n")
+            f.write("    ux, uy = dx/mag, dy/mag\n")
+            f.write("    # Feed point = inner face of ground plane\n")
+            f.write("    feed_x = cx + ux * gp_thickness\n")
+            f.write("    feed_y = cy + uy * gp_thickness\n")
+            f.write("    # Monopole tip = feed + monopole_length radially inward\n")
+            f.write("    tip_x = feed_x + ux * monopole_length\n")
+            f.write("    tip_y = feed_y + uy * monopole_length\n")
+            f.write("    # Dominant axis for transmission line polarisation\n")
+            f.write("    pol = 'x' if abs(ux) >= abs(uy) else 'y'\n")
+            f.write("    antenna_positions.append((cx, cy, cz, ux, uy, feed_x, feed_y, tip_x, tip_y, pol))\n")
             f.write("#end_python:\n\n")
-            
+
             for ant_idx in range(n_antennas):
                 f.write(f"## Antenna {ant_idx+1}\n#python:\n")
-                f.write(f"x, y, z_base = antenna_positions[{ant_idx}]\n")
-                f.write("gp_z1, gp_z2 = z_base - gp_thickness/2, z_base + gp_thickness/2\n")
-                f.write("mono_top = gp_z2 + monopole_length\n")
-                f.write("print(f'#box: {x-gp_half_size} {y-gp_half_size} {gp_z1} {x+gp_half_size} {y+gp_half_size} {gp_z2} pec')\n")
-                f.write("print(f'#cylinder: {x} {y} {gp_z2} {x} {y} {mono_top} {wire_radius} pec')\n")
+                f.write(f"cx, cy, cz, ux, uy, feed_x, feed_y, tip_x, tip_y, pol = antenna_positions[{ant_idx}]\n")
+                f.write("# Ground plane box (perpendicular to radial, outer side of feed)\n")
+                f.write("gp_x1 = cx - gp_half_size*abs(uy) - gp_thickness*abs(ux)\n")
+                f.write("gp_x2 = cx + gp_half_size*abs(uy) + gp_thickness*abs(ux)\n")
+                f.write("gp_y1 = cy - gp_half_size*abs(ux) - gp_thickness*abs(uy)\n")
+                f.write("gp_y2 = cy + gp_half_size*abs(ux) + gp_thickness*abs(uy)\n")
+                f.write("gp_z1 = cz - gp_half_size\n")
+                f.write("gp_z2 = cz + gp_half_size\n")
+                f.write("print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')\n")
+                f.write("# Monopole cylinder pointing radially inward\n")
+                f.write("print(f'#cylinder: {feed_x} {feed_y} {cz} {tip_x} {tip_y} {cz} {wire_radius} pec')\n")
                 if ant_idx == src_idx:
-                    # Transmitter: active waveform (amplitude 1)
-                    f.write("print(f'#transmission_line: z {x} {y} {gp_z2} 50 tx_pulse')\n")
+                    f.write("print(f'#transmission_line: {pol} {feed_x} {feed_y} {cz} 50 tx_pulse')\n")
                 else:
-                    # Receivers: zero-amplitude waveform (measures signal, injects nothing)
-                    f.write("print(f'#transmission_line: z {x} {y} {gp_z2} 50 rx_null')\n")
+                    f.write("print(f'#transmission_line: {pol} {feed_x} {feed_y} {cz} 50 rx_null')\n")
                 f.write("#end_python:\n\n")
 
 # ============================================================================

@@ -246,62 +246,61 @@ for src_idx in range(n_antennas):
         f.write(f"#sphere: {lesion_x} {lesion_y} {lesion_z} 0.015 blood\n")
         f.write(f"#sphere: {lesion_x + 0.004} {lesion_y} {lesion_z} 0.01 blood\n\n")
         
-        # Antenna array
+        # Antenna array - monopoles pointing RADIALLY INWARD toward head
         f.write(f"#python:\n")
-        f.write(f"# Antenna geometry parameters\n")
+        f.write(f"import math\n")
         f.write(f"monopole_length = {monopole_length}\n")
         f.write(f"wire_radius = {wire_radius}\n")
         f.write(f"gp_half_size = {gp_half_size}\n")
         f.write(f"gp_thickness = {gp_thickness}\n")
-        f.write(f"n_antennas = {n_antennas}\n\n")
-        f.write(f"# Compute antenna positions (touching coupling medium)\n")
-        f.write(f"antenna_positions = []\n")
-        # Add required imports and aliases so gprMax's python execution sees them
-        f.write(f"import math\n")
+        f.write(f"n_antennas = {n_antennas}\n")
         f.write(f"head_center = ({head_center[0]}, {head_center[1]}, {head_center[2]})\n")
         f.write(f"a = {head_semi_axes['a']}\n")
         f.write(f"b = {head_semi_axes['b']}\n")
         f.write(f"scalp_thickness = {scalp_skull_thickness}\n")
         f.write(f"coupling_thickness = {coupling_thickness}\n")
+        f.write(f"antenna_positions = []\n")
         f.write(f"for i in range(n_antennas):\n")
         f.write(f"    angle = 2 * math.pi * i / n_antennas\n")
-        f.write(f"    # Position on ellipse + coupling + ground plane clearance\n")
-        f.write(f"    x = head_center[0] + (a + scalp_thickness + coupling_thickness + gp_half_size) * math.cos(angle)\n")
-        f.write(f"    y = head_center[1] + (b + scalp_thickness + coupling_thickness + gp_half_size) * math.sin(angle)\n")
-        f.write(f"    z = head_center[2]\n")
-        f.write(f"    antenna_positions.append((x, y, z, angle))\n")
+        f.write(f"    r_x = a + scalp_thickness + coupling_thickness + gp_thickness\n")
+        f.write(f"    r_y = b + scalp_thickness + coupling_thickness + gp_thickness\n")
+        f.write(f"    cx = head_center[0] + r_x * math.cos(angle)\n")
+        f.write(f"    cy = head_center[1] + r_y * math.sin(angle)\n")
+        f.write(f"    cz = head_center[2]\n")
+        f.write(f"    dx = head_center[0] - cx\n")
+        f.write(f"    dy = head_center[1] - cy\n")
+        f.write(f"    mag = math.sqrt(dx*dx + dy*dy)\n")
+        f.write(f"    ux, uy = dx/mag, dy/mag\n")
+        f.write(f"    feed_x = cx + ux * gp_thickness\n")
+        f.write(f"    feed_y = cy + uy * gp_thickness\n")
+        f.write(f"    tip_x = feed_x + ux * monopole_length\n")
+        f.write(f"    tip_y = feed_y + uy * monopole_length\n")
+        f.write(f"    pol = 'x' if abs(ux) >= abs(uy) else 'y'\n")
+        f.write(f"    antenna_positions.append((cx, cy, cz, ux, uy, feed_x, feed_y, tip_x, tip_y, pol))\n")
         f.write(f"#end_python:\n\n")
-        
+
         # Generate all antennas
-        f.write(f"## Antenna array - 16 monopoles in fixed positions\n")
+        f.write(f"## Antenna array - 16 monopoles pointing radially inward\n")
         for ant_idx in range(n_antennas):
             ant_num = ant_idx + 1
             f.write(f"\n## Antenna {ant_num}\n")
             f.write(f"#python:\n")
-            f.write(f"ant_idx = {ant_idx}\n")
-            f.write(f"x, y, z_base, angle = antenna_positions[ant_idx]\n")
-            f.write(f"gp_x1 = x - gp_half_size\n")
-            f.write(f"gp_x2 = x + gp_half_size\n")
-            f.write(f"gp_y1 = y - gp_half_size\n")
-            f.write(f"gp_y2 = y + gp_half_size\n")
-            f.write(f"gp_z1 = z_base - gp_thickness/2\n")
-            f.write(f"gp_z2 = z_base + gp_thickness/2\n")
-            f.write(f"mono_top = gp_z2 + monopole_length\n")
-            f.write(f"feed_z = gp_z2\n\n")
-            
-            # Write geometry commands INSIDE the Python block using print()
-            # This way Python evaluates the variables and outputs the actual commands
-            is_transmitter = (ant_idx == src_idx)
+            f.write(f"cx, cy, cz, ux, uy, feed_x, feed_y, tip_x, tip_y, pol = antenna_positions[{ant_idx}]\n")
+            f.write(f"gp_x1 = cx - gp_half_size*abs(uy) - gp_thickness*abs(ux)\n")
+            f.write(f"gp_x2 = cx + gp_half_size*abs(uy) + gp_thickness*abs(ux)\n")
+            f.write(f"gp_y1 = cy - gp_half_size*abs(ux) - gp_thickness*abs(uy)\n")
+            f.write(f"gp_y2 = cy + gp_half_size*abs(ux) + gp_thickness*abs(uy)\n")
+            f.write(f"gp_z1 = cz - gp_half_size\n")
+            f.write(f"gp_z2 = cz + gp_half_size\n")
             f.write("print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')\n")
-            f.write("print(f'#cylinder: {x} {y} {feed_z} {x} {y} {mono_top} {wire_radius} pec')\n")
-            
-            # Use transmission_line for accurate S-parameter extraction (CPU only)
+            f.write("print(f'#cylinder: {feed_x} {feed_y} {cz} {tip_x} {tip_y} {cz} {wire_radius} pec')\n")
+
+            is_transmitter = (ant_idx == src_idx)
             if is_transmitter:
-                f.write("print(f'#transmission_line: z {x} {y} {feed_z} 50 tx_pulse')\n")
+                f.write("print(f'#transmission_line: {pol} {feed_x} {feed_y} {cz} 50 tx_pulse')\n")
             else:
-                # Receivers: zero-amplitude waveform (measures signal, injects nothing)
-                f.write("print(f'#transmission_line: z {x} {y} {feed_z} 50 rx_null')\n")
-            
+                f.write("print(f'#transmission_line: {pol} {feed_x} {feed_y} {cz} 50 rx_null')\n")
+
             f.write("#end_python:\n")
         
         f.write(f"\n## End of input file\n")
