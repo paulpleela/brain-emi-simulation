@@ -52,30 +52,13 @@ coupling_eps_r = (12 + 52) / 2  # ≈ 32
 coupling_sigma = (0.2 + 0.97) / 2  # ≈ 0.6 S/m
 coupling_thickness = 0.005  # 5 mm layer
 
-# Antenna positions - 16 antennas in fixed positions around head
-# Positioned to touch coupling medium (not floating)
 n_antennas = 16
-
-# Calculate antenna positions on ellipsoid surface
-antenna_positions = []
-for i in range(n_antennas):
-    # Distribute around head in horizontal plane (z = head center)
-    angle = 2 * math.pi * i / n_antennas
-    
-    # On ellipse in x-y plane
-    # Parametric: x = a*cos(θ), y = b*sin(θ)
-    # Add coupling thickness to position antennas just outside head
-    x = head_center[0] + (head_semi_axes['a'] + scalp_skull_thickness + coupling_thickness + gp_half_size) * math.cos(angle)
-    y = head_center[1] + (head_semi_axes['b'] + scalp_skull_thickness + coupling_thickness + gp_half_size) * math.sin(angle)
-    z = head_center[2]  # Same z as head center (equatorial plane)
-    
-    antenna_positions.append((x, y, z, angle))
 
 print("="*70)
 print("BRAIN EMI SIMULATION PARAMETERS")
 print("="*70)
 print(f"\nFrequency range: 0 - 2 GHz")
-print(f"Monopole length: {monopole_length*1000:.1f} mm (λ/4 @ 2 GHz)")
+print(f"Monopole length: {monopole_length*1000:.1f} mm (L/4 @ 2 GHz)")
 print(f"Ground plane: {gp_size*1000:.1f} × {gp_size*1000:.1f} mm")
 print(f"\nHead model: TRUE ELLIPSOIDAL GEOMETRY (not spherical)")
 print(f"  Semi-axes: a={head_semi_axes['a']*100:.1f} cm, b={head_semi_axes['b']*100:.1f} cm, c={head_semi_axes['c']*100:.1f} cm")
@@ -84,7 +67,7 @@ print(f"  Gray matter thickness: {gray_matter_thickness*1000:.0f} mm")
 print(f"  CSF ventricles: INCLUDED (left + right lateral)")
 print(f"\nCoupling medium:")
 print(f"  Thickness: {coupling_thickness*1000:.0f} mm")
-print(f"  εr = {coupling_eps_r:.1f}, σ = {coupling_sigma:.2f} S/m")
+print(f"  er = {coupling_eps_r:.1f}, sigma = {coupling_sigma:.2f} S/m")
 print(f"\nAntennas: {n_antennas} monopoles in circular array")
 print("="*70)
 
@@ -246,39 +229,48 @@ for src_idx in range(n_antennas):
         f.write(f"#sphere: {lesion_x} {lesion_y} {lesion_z} 0.015 blood\n")
         f.write(f"#sphere: {lesion_x + 0.004} {lesion_y} {lesion_z} 0.01 blood\n\n")
         
-        # Antenna array: radial inward monopoles at the equatorial ring
-        # 16 antennas in a ring around the head at z = head_center[2].
-        # Each monopole points radially INWARD toward the head center.
-        # TL pol = 'x' if |cos(theta)| >= |sin(theta)|, else 'y' (dominant axis).
-        # GP = vertical PEC slab (1 cell thick) outside the feed, acting as backplane.
+        # ── Antenna array: radial inward monopoles at the equatorial ring ──────
+        # Each antenna's feed sits at the outer surface of the coupling layer,
+        # snapped to the nearest grid cell.  The monopole wire points radially
+        # INWARD toward the head center along the dominant Cartesian axis.
+        # Because gprMax transmission lines must be axis-aligned, we use:
+        #   pol='x'  when |cos θ| ≥ |sin θ|  (antennas near ±X side)
+        #   pol='y'  when |sin θ|  > |cos θ|  (antennas near ±Y side)
+        # The ground-plane PEC slab is placed one cell OUTSIDE the feed,
+        # perpendicular to the monopole axis, acting as a backplane reflector.
+        f.write(f"## Antenna array (16 radial inward monopoles at equatorial ring)\n")
         f.write(f"#python:\n")
         f.write(f"import math\n")
-        f.write(f"cell            = {gp_thickness}\n")
-        f.write(f"monopole_length = {monopole_length}\n")
-        f.write(f"wire_radius     = {wire_radius}\n")
-        f.write(f"gp_half_size    = {gp_half_size}\n")
-        f.write(f"gp_thickness    = {gp_thickness}\n")
-        f.write(f"n_antennas      = {n_antennas}\n")
-        f.write(f"head_center     = ({head_center[0]}, {head_center[1]}, {head_center[2]})\n")
-        f.write(f"a               = {head_semi_axes['a']}\n")
-        f.write(f"b               = {head_semi_axes['b']}\n")
+        f.write(f"cell               = {gp_thickness}\n")
+        f.write(f"monopole_length    = {monopole_length}\n")
+        f.write(f"wire_radius        = {wire_radius}\n")
+        f.write(f"gp_half_size       = {gp_half_size}\n")
+        f.write(f"gp_thickness       = {gp_thickness}\n")
+        f.write(f"n_antennas         = {n_antennas}\n")
+        f.write(f"head_center        = ({head_center[0]}, {head_center[1]}, {head_center[2]})\n")
+        f.write(f"a                  = {head_semi_axes['a']}\n")
+        f.write(f"b                  = {head_semi_axes['b']}\n")
         f.write(f"scalp_thickness    = {scalp_skull_thickness}\n")
         f.write(f"coupling_thickness = {coupling_thickness}\n")
-        f.write(f"antennas = []\n")
+        f.write(f"antennas = []  # (cx,cy,cz, tip_x,tip_y,tip_z, gp_x1,gp_y1,gp_z1, gp_x2,gp_y2,gp_z2, pol)\n")
         f.write(f"for i in range(n_antennas):\n")
         f.write(f"    angle = 2 * math.pi * i / n_antennas\n")
         f.write(f"    cos_a = math.cos(angle)\n")
         f.write(f"    sin_a = math.sin(angle)\n")
+        f.write(f"    # Feed position: outer surface of coupling layer, snapped to grid\n")
         f.write(f"    r_x = a + scalp_thickness + coupling_thickness + cell\n")
         f.write(f"    r_y = b + scalp_thickness + coupling_thickness + cell\n")
         f.write(f"    cx = round((head_center[0] + r_x * cos_a) / cell) * cell\n")
         f.write(f"    cy = round((head_center[1] + r_y * sin_a) / cell) * cell\n")
         f.write(f"    cz = head_center[2]\n")
         f.write(f"    if abs(cos_a) >= abs(sin_a):\n")
+        f.write(f"        # Dominant X axis — monopole points radially inward along X\n")
         f.write(f"        pol = 'x'\n")
-        f.write(f"        direction = -1 if cos_a > 0 else 1\n")
+        f.write(f"        direction = -1 if cos_a > 0 else 1  # inward = toward head center\n")
         f.write(f"        tip_x = round((cx + direction * monopole_length) / cell) * cell\n")
-        f.write(f"        tip_y = cy; tip_z = cz\n")
+        f.write(f"        tip_y = cy\n")
+        f.write(f"        tip_z = cz\n")
+        f.write(f"        # GP: YZ-plane slab, 1 cell thick, placed outside the feed\n")
         f.write(f"        gp_outer = round((cx - direction * gp_thickness) / cell) * cell\n")
         f.write(f"        gp_x1 = min(cx, gp_outer); gp_x2 = max(cx, gp_outer) + cell\n")
         f.write(f"        gp_y1 = round((cy - gp_half_size) / cell) * cell\n")
@@ -286,10 +278,13 @@ for src_idx in range(n_antennas):
         f.write(f"        gp_z1 = round((cz - gp_half_size) / cell) * cell\n")
         f.write(f"        gp_z2 = round((cz + gp_half_size) / cell) * cell\n")
         f.write(f"    else:\n")
+        f.write(f"        # Dominant Y axis — monopole points radially inward along Y\n")
         f.write(f"        pol = 'y'\n")
-        f.write(f"        direction = -1 if sin_a > 0 else 1\n")
-        f.write(f"        tip_x = cx; tip_z = cz\n")
+        f.write(f"        direction = -1 if sin_a > 0 else 1  # inward = toward head center\n")
+        f.write(f"        tip_x = cx\n")
         f.write(f"        tip_y = round((cy + direction * monopole_length) / cell) * cell\n")
+        f.write(f"        tip_z = cz\n")
+        f.write(f"        # GP: XZ-plane slab, 1 cell thick, placed outside the feed\n")
         f.write(f"        gp_outer = round((cy - direction * gp_thickness) / cell) * cell\n")
         f.write(f"        gp_x1 = round((cx - gp_half_size) / cell) * cell\n")
         f.write(f"        gp_x2 = round((cx + gp_half_size) / cell) * cell\n")
@@ -299,20 +294,19 @@ for src_idx in range(n_antennas):
         f.write(f"    antennas.append((cx,cy,cz, tip_x,tip_y,tip_z, gp_x1,gp_y1,gp_z1, gp_x2,gp_y2,gp_z2, pol))\n")
         f.write(f"#end_python:\n\n")
 
-        # Generate all antennas
+        # Per-antenna geometry block: GP slab + monopole wire + transmission line
         f.write(f"## Antenna array - 16 radial inward monopoles\n")
         for ant_idx in range(n_antennas):
             ant_num = ant_idx + 1
             f.write(f"\n## Antenna {ant_num}\n")
             f.write(f"#python:\n")
             f.write(f"cx,cy,cz, tip_x,tip_y,tip_z, gp_x1,gp_y1,gp_z1, gp_x2,gp_y2,gp_z2, pol = antennas[{ant_idx}]\n")
-            f.write("# GP: vertical PEC slab (backplane reflector)\n")
+            f.write("# GP: PEC backplane slab outside the feed\n")
             f.write("print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')\n")
-            f.write("# Monopole: radial PEC wire from feed to tip (inward)\n")
+            f.write("# Monopole: PEC wire from feed point inward toward head center\n")
             f.write("print(f'#cylinder: {cx} {cy} {cz} {tip_x} {tip_y} {tip_z} {wire_radius} pec')\n")
 
-            is_transmitter = (ant_idx == src_idx)
-            if is_transmitter:
+            if ant_idx == src_idx:
                 f.write("print(f'#transmission_line: {pol} {cx} {cy} {cz} 50 tx_pulse')\n")
             else:
                 f.write("print(f'#transmission_line: {pol} {cx} {cy} {cz} 50 rx_null')\n")
