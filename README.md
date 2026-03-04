@@ -64,7 +64,7 @@ See **`HPC_GUIDE.md`** for complete instructions.
 
 **Summary**:
 1. Push code: `git push origin main`
-2. SSH to Rangpur: `ssh s4910027@login0.hpc.griffith.edu.au`
+2. SSH to Rangpur
 3. Pull code: `cd ~/brain-emi-simulation && git pull`
 4. Setup (first time): `conda env create -f gprMax/conda_env.yml`
 5. Test: `python -m gprMax brain_inputs/scenario_001_tx01.in -n 8`

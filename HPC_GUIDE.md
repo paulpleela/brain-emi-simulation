@@ -1,45 +1,7 @@
 # Running Brain EMI Simulations on Rangpur HPC
 
-Complete guide from git push to running 300 scenarios.
 
----
-
-## Part 1: Push Your Code to GitHub
-
-### On your local machine (Windows PowerShell):
-
-```powershell
-# Navigate to your project
-cd "C:\Users\paudo\OneDrive\Documents\Thesis gprmax"
-
-# Check what's new
-git status
-
-# Add all new files
-git add .
-
-# Commit with message
-git commit -m "Add 300-scenario dataset for ML training"
-
-# Push to GitHub
-git push origin main
-```
-
----
-
-## Part 2: Connect to Rangpur HPC
-
-### SSH to Rangpur:
-
-```powershell
-ssh s4910027@login0.hpc.griffith.edu.au
-```
-
-Enter your password when prompted.
-
----
-
-## Part 3: Set Up on HPC (First Time Only)
+## Part 1: Set Up on HPC (First Time Only)
 
 ### Clone or Pull Repository:
 
@@ -85,7 +47,7 @@ cd ~/brain-emi-simulation
 
 ---
 
-## Part 4: Test Single Scenario
+## Part 2: Test Single Scenario
 
 ### Prepare Test:
 
@@ -116,7 +78,7 @@ If this works, your setup is correct! ✅
 
 ---
 
-## Part 5: Run Small Batch (10 Scenarios)
+## Part 3: Run Small Batch (10 Scenarios)
 
 ### Modify SLURM Script:
 
@@ -171,7 +133,7 @@ sacct --format=JobID,State | grep COMPLETED | wc -l
 
 ---
 
-## Part 6: Run Full Dataset (300 Scenarios)
+## Part 4: Run Full Dataset (300 Scenarios)
 
 ### Update SLURM Script:
 
@@ -205,7 +167,7 @@ watch -n 60 'echo "Running: $(squeue -u s4910027 | wc -l)"; echo "Completed: $(s
 
 ---
 
-## Part 7: Check Results
+## Part 5: Check Results
 
 ### Verify Outputs:
 
@@ -235,27 +197,6 @@ sacct --format=JobID,State | grep FAILED
 # Check error logs
 ls logs/*.err | xargs grep -l ERROR
 ```
-
----
-
-## Part 8: Download Results (Optional)
-
-### Download to Local Machine:
-
-From your Windows PowerShell:
-
-```powershell
-# Create local output directory
-mkdir outputs
-
-# Download all .out files (WARNING: ~380 GB!)
-scp -r s4910027@login0.hpc.griffith.edu.au:~/brain-emi-simulation/brain_inputs/*.out ./outputs/
-
-# Or download specific scenarios
-scp s4910027@login0.hpc.griffith.edu.au:~/brain-emi-simulation/brain_inputs/scenario_001_*.out ./outputs/
-```
-
-**Tip:** Process S-parameters on HPC first to reduce download size!
 
 ---
 
@@ -303,21 +244,6 @@ python setup.py install
 # Make sure you're in right directory
 cd ~/brain-emi-simulation
 ls brain_inputs/ | head
-```
-
----
-
-## Quick Reference Commands
-
-### On Local Machine:
-```powershell
-# Push code
-git add .
-git commit -m "Update"
-git push origin main
-
-# SSH to HPC
-ssh s4910027@login0.hpc.griffith.edu.au
 ```
 
 ### On Rangpur HPC:
