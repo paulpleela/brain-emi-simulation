@@ -4,10 +4,20 @@ Generate brain imaging input files with:
 - CSF ventricles (left and right lateral ventricles)
 - Coupling medium between antennas and head
 - 0-2 GHz bandwidth
-- 16 monopole antennas in circular array
+- 16 Hertzian dipole antennas in circular array
 
-This generates proper ellipsoidal layers using voxel-based geometry.
-Each layer (coupling, scalp/skull, gray, white matter) follows ellipsoidal shape.
+Each antenna is a gprMax #hertzian_dipole point source placed at the outer
+surface of the coupling layer.  The dipole polarisation is the Cartesian axis
+most aligned with the true radial direction toward the head centre (x or y),
+so the excitation field points directly into the head.  A co-located
+#transmission_line with the same polarisation records the incident/total
+voltages needed for S-parameter extraction.
+
+No physical wires, no ground-plane slabs — no geometry penetrates the head.
+
+Coupling medium: low-loss glycerol/water-like medium (εᵣ≈36, σ≈0.3 S/m).
+High εᵣ improves impedance matching to tissue; low σ avoids absorbing the
+signal before it reaches the head.
 """
 
 import os
@@ -21,14 +31,9 @@ os.makedirs(output_dir, exist_ok=True)
 # Physical constants
 c0 = 3e8  # m/s
 f_max = 2e9  # 2 GHz (upper frequency)
-wavelength_min = c0 / f_max  # 0.15 m = 150 mm
 
-# For 2 GHz operation, monopole needs to be shorter
-monopole_length = wavelength_min / 4  # 37.5 mm (λ/4 @ 2 GHz)
-wire_radius = 0.001  # 1 mm
-gp_size = wavelength_min / 2  # 75 mm (smaller ground plane for 2 GHz)
-gp_half_size = gp_size / 2
-gp_thickness = 0.002  # 2 mm
+# Grid cell size — all snapping uses this
+cell = 0.002  # 2 mm
 
 # Realistic ellipsoidal head dimensions (average adult)
 # Using semi-axes: a (front-back), b (side-side), c (top-bottom)
@@ -47,9 +52,11 @@ gray_matter_thickness = 0.003   # 3 mm cortical gray matter
 # White matter fills the rest
 
 # Coupling medium (average dielectric of head tissues for better penetration)
-# Using average of scalp and gray matter
-coupling_eps_r = (12 + 52) / 2  # ≈ 32
-coupling_sigma = (0.2 + 0.97) / 2  # ≈ 0.6 S/m
+# Coupling medium: low-loss glycerol/water-like mixture
+# High εᵣ ≈ 36 matches head tissue impedance; low σ avoids absorbing the signal
+# before it enters the head (NOT an absorber — that job belongs to the PML walls).
+coupling_eps_r = 36.0   # glycerol/water mixture, typical brain-imaging rig value
+coupling_sigma = 0.3    # S/m — low loss, ~half the old 0.6 S/m value
 coupling_thickness = 0.005  # 5 mm layer
 
 n_antennas = 16
@@ -58,17 +65,17 @@ print("="*70)
 print("BRAIN EMI SIMULATION PARAMETERS")
 print("="*70)
 print(f"\nFrequency range: 0 - 2 GHz")
-print(f"Monopole length: {monopole_length*1000:.1f} mm (L/4 @ 2 GHz)")
-print(f"Ground plane: {gp_size*1000:.1f} × {gp_size*1000:.1f} mm")
+print(f"Antennas: {n_antennas} Hertzian dipoles (point sources, no physical wire)")
+print(f"  — polarised along dominant radial Cartesian axis (x or y)")
+print(f"  — feed at outer surface of coupling layer, pointing INTO the head")
 print(f"\nHead model: TRUE ELLIPSOIDAL GEOMETRY (not spherical)")
 print(f"  Semi-axes: a={head_semi_axes['a']*100:.1f} cm, b={head_semi_axes['b']*100:.1f} cm, c={head_semi_axes['c']*100:.1f} cm")
 print(f"  Scalp/skull thickness: {scalp_skull_thickness*1000:.0f} mm")
 print(f"  Gray matter thickness: {gray_matter_thickness*1000:.0f} mm")
 print(f"  CSF ventricles: INCLUDED (left + right lateral)")
-print(f"\nCoupling medium:")
+print(f"\nCoupling medium (low-loss glycerol/water mixture):")
 print(f"  Thickness: {coupling_thickness*1000:.0f} mm")
 print(f"  er = {coupling_eps_r:.1f}, sigma = {coupling_sigma:.2f} S/m")
-print(f"\nAntennas: {n_antennas} monopoles in circular array")
 print("="*70)
 
 # Generate input files
@@ -228,97 +235,67 @@ for src_idx in range(n_antennas):
         f.write(f"## Hemorrhagic lesion (blood clot)\n")
         f.write(f"#sphere: {lesion_x} {lesion_y} {lesion_z} 0.015 blood\n")
         f.write(f"#sphere: {lesion_x + 0.004} {lesion_y} {lesion_z} 0.01 blood\n\n")
-        
-        # ── Antenna array: radial inward monopoles at the equatorial ring ──────
-        # Each antenna's feed sits at the outer surface of the coupling layer,
-        # snapped to the nearest grid cell.  The monopole wire points radially
-        # INWARD toward the head center along the dominant Cartesian axis.
-        # Because gprMax transmission lines must be axis-aligned, we use:
-        #   pol='x'  when |cos θ| ≥ |sin θ|  (antennas near ±X side)
-        #   pol='y'  when |sin θ|  > |cos θ|  (antennas near ±Y side)
-        # The ground-plane PEC slab is placed one cell OUTSIDE the feed,
-        # perpendicular to the monopole axis, acting as a backplane reflector.
-        f.write(f"## Antenna array (16 radial inward monopoles at equatorial ring)\n")
+
+        # ── Antenna array: 16 Hertzian dipole point sources ───────────────────
+        # Each antenna feed is at the outer surface of the coupling layer,
+        # snapped to the nearest grid cell.
+        #
+        # Dipole polarisation = Cartesian axis most aligned with the true radial
+        # direction toward the head centre:
+        #   pol='x'  when |cos θ| ≥ |sin θ|   (antennas near ±X side)
+        #   pol='y'  when |sin θ|  > |cos θ|   (antennas near ±Y side)
+        #
+        # A #hertzian_dipole is a point source — no physical wire, no ground
+        # plane, nothing penetrates the head.  The co-located #transmission_line
+        # (same polarisation) records V and I for S-parameter extraction.
+        #
+        # Compute all 16 feed positions once in a #python: block, store in
+        # 'antennas' list, then emit the two gprMax commands per antenna.
+        f.write(f"## Antenna array (16 Hertzian dipoles at equatorial ring)\n")
         f.write(f"#python:\n")
         f.write(f"import math\n")
-        f.write(f"cell               = {gp_thickness}\n")
-        f.write(f"monopole_length    = {monopole_length}\n")
-        f.write(f"wire_radius        = {wire_radius}\n")
-        f.write(f"gp_half_size       = {gp_half_size}\n")
-        f.write(f"gp_thickness       = {gp_thickness}\n")
+        f.write(f"cell               = {cell}\n")
         f.write(f"n_antennas         = {n_antennas}\n")
         f.write(f"head_center        = ({head_center[0]}, {head_center[1]}, {head_center[2]})\n")
         f.write(f"a                  = {head_semi_axes['a']}\n")
         f.write(f"b                  = {head_semi_axes['b']}\n")
         f.write(f"scalp_thickness    = {scalp_skull_thickness}\n")
         f.write(f"coupling_thickness = {coupling_thickness}\n")
-        f.write(f"antennas = []  # (cx,cy,cz, tip_x,tip_y,tip_z, gp_x1,gp_y1,gp_z1, gp_x2,gp_y2,gp_z2, pol)\n")
+        f.write(f"antennas = []  # (cx, cy, cz, pol)\n")
         f.write(f"for i in range(n_antennas):\n")
         f.write(f"    angle = 2 * math.pi * i / n_antennas\n")
         f.write(f"    cos_a = math.cos(angle)\n")
         f.write(f"    sin_a = math.sin(angle)\n")
-        f.write(f"    # Feed position: outer surface of coupling layer, snapped to grid\n")
+        f.write(f"    # Feed at outer surface of coupling layer, snapped to grid\n")
         f.write(f"    r_x = a + scalp_thickness + coupling_thickness + cell\n")
         f.write(f"    r_y = b + scalp_thickness + coupling_thickness + cell\n")
         f.write(f"    cx = round((head_center[0] + r_x * cos_a) / cell) * cell\n")
         f.write(f"    cy = round((head_center[1] + r_y * sin_a) / cell) * cell\n")
         f.write(f"    cz = head_center[2]\n")
-        f.write(f"    if abs(cos_a) >= abs(sin_a):\n")
-        f.write(f"        # Dominant X axis — monopole points radially inward along X\n")
-        f.write(f"        pol = 'x'\n")
-        f.write(f"        direction = -1 if cos_a > 0 else 1  # inward = toward head center\n")
-        f.write(f"        tip_x = round((cx + direction * monopole_length) / cell) * cell\n")
-        f.write(f"        tip_y = cy\n")
-        f.write(f"        tip_z = cz\n")
-        f.write(f"        # GP: YZ-plane slab, 1 cell thick, placed OUTSIDE the feed\n")
-        f.write(f"        # outward = -direction; GP occupies [cx+(-dir)*cell, cx+(-dir)*2*cell)\n")
-        f.write(f"        gp_outer = round((cx + (-direction) * gp_thickness) / cell) * cell\n")
-        f.write(f"        gp_x1 = min(cx + (-direction)*cell, gp_outer)\n")
-        f.write(f"        gp_x2 = max(cx + (-direction)*cell, gp_outer) + cell\n")
-        f.write(f"        gp_y1 = round((cy - gp_half_size) / cell) * cell\n")
-        f.write(f"        gp_y2 = round((cy + gp_half_size) / cell) * cell\n")
-        f.write(f"        gp_z1 = round((cz - gp_half_size) / cell) * cell\n")
-        f.write(f"        gp_z2 = round((cz + gp_half_size) / cell) * cell\n")
-        f.write(f"    else:\n")
-        f.write(f"        # Dominant Y axis — monopole points radially inward along Y\n")
-        f.write(f"        pol = 'y'\n")
-        f.write(f"        direction = -1 if sin_a > 0 else 1  # inward = toward head center\n")
-        f.write(f"        tip_x = cx\n")
-        f.write(f"        tip_y = round((cy + direction * monopole_length) / cell) * cell\n")
-        f.write(f"        tip_z = cz\n")
-        f.write(f"        # GP: XZ-plane slab, 1 cell thick, placed OUTSIDE the feed\n")
-        f.write(f"        # outward = -direction; GP occupies [cy+(-dir)*cell, cy+(-dir)*2*cell)\n")
-        f.write(f"        gp_outer = round((cy + (-direction) * gp_thickness) / cell) * cell\n")
-        f.write(f"        gp_x1 = round((cx - gp_half_size) / cell) * cell\n")
-        f.write(f"        gp_x2 = round((cx + gp_half_size) / cell) * cell\n")
-        f.write(f"        gp_y1 = min(cy + (-direction)*cell, gp_outer)\n")
-        f.write(f"        gp_y2 = max(cy + (-direction)*cell, gp_outer) + cell\n")
-        f.write(f"        gp_z1 = round((cz - gp_half_size) / cell) * cell\n")
-        f.write(f"        gp_z2 = round((cz + gp_half_size) / cell) * cell\n")
-        f.write(f"    antennas.append((cx,cy,cz, tip_x,tip_y,tip_z, gp_x1,gp_y1,gp_z1, gp_x2,gp_y2,gp_z2, pol))\n")
+        f.write(f"    # Dominant Cartesian axis for this feed position\n")
+        f.write(f"    pol = 'x' if abs(cos_a) >= abs(sin_a) else 'y'\n")
+        f.write(f"    antennas.append((cx, cy, cz, pol))\n")
         f.write(f"#end_python:\n\n")
 
-        # Per-antenna geometry block: GP slab + monopole wire + transmission line
-        f.write(f"## Antenna array - 16 radial inward monopoles\n")
+        # Per-antenna commands: hertzian_dipole (source/field) + transmission_line (measurement)
+        f.write(f"## Antenna array - 16 Hertzian dipoles\n")
         for ant_idx in range(n_antennas):
             ant_num = ant_idx + 1
             f.write(f"\n## Antenna {ant_num}\n")
             f.write(f"#python:\n")
-            f.write(f"cx,cy,cz, tip_x,tip_y,tip_z, gp_x1,gp_y1,gp_z1, gp_x2,gp_y2,gp_z2, pol = antennas[{ant_idx}]\n")
-            f.write("# GP: PEC backplane slab outside the feed\n")
-            f.write("print(f'#box: {gp_x1} {gp_y1} {gp_z1} {gp_x2} {gp_y2} {gp_z2} pec')\n")
-            f.write("# Monopole: PEC wire from feed point inward toward head center\n")
-            f.write("print(f'#cylinder: {cx} {cy} {cz} {tip_x} {tip_y} {tip_z} {wire_radius} pec')\n")
-
+            f.write(f"cx, cy, cz, pol = antennas[{ant_idx}]\n")
+            # TX antenna: Hertzian dipole drives the field; TL records V/I
             if ant_idx == src_idx:
+                f.write("print(f'#hertzian_dipole: {pol} {cx} {cy} {cz} tx_pulse')\n")
                 f.write("print(f'#transmission_line: {pol} {cx} {cy} {cz} 50 tx_pulse')\n")
+            # RX antenna: zero-amplitude dipole (no excitation); TL records induced V/I
             else:
+                f.write("print(f'#hertzian_dipole: {pol} {cx} {cy} {cz} rx_null')\n")
                 f.write("print(f'#transmission_line: {pol} {cx} {cy} {cz} 50 rx_null')\n")
-
             f.write("#end_python:\n")
-        
+
         f.write(f"\n## End of input file\n")
-    
+
     print(f"  Created: {filename}")
 
-print(f"\n✓ Generated {n_antennas} input files in {output_dir}/")
+print(f"\nDone. Generated {n_antennas} input files in {output_dir}/")
