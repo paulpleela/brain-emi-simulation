@@ -30,6 +30,11 @@ coupling_sigma = 0.3
 coupling_thickness = 0.005
 n_antennas = 16
 
+# Wire dipole dimensions (z-directed, resonant in coupling medium at 1.25 GHz)
+dipole_arm_len = 0.010   # 10 mm per arm
+dipole_gap     = 0.002   # 2 mm feed gap (1 cell)
+dipole_tl_ohms = 73      # Ω — half-wave dipole input impedance
+
 # ============================================================================
 # DATASET CONFIGURATION
 # ============================================================================
@@ -162,27 +167,29 @@ def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
                 lz = head_center[2] + lesion_pos[2]
                 f.write(f"## Hemorrhage\n#sphere: {lx} {ly} {lz} {lesion_size} blood\n\n")
             
-            # Antennas: 16 Hertzian dipole point sources at the equatorial ring
-            # Each dipole is placed at the outer surface of the coupling layer.
-            # Polarisation = dominant Cartesian axis toward head centre (x or y).
-            # No physical wires, no ground-plane slabs.
-            # Co-located #transmission_line records V/I for S-param extraction.
+            # Waveforms - Gaussian centred at 1.25 GHz for 0.5-2 GHz bandwidth
             f.write("## Waveforms\n")
-            f.write(f"#waveform: gaussian 1 1e9 tx_pulse\n")
-            f.write(f"#waveform: gaussian 0 1e9 rx_null\n\n")
+            f.write(f"#waveform: gaussian 1 1.25e9 tx_pulse\n")
+            f.write(f"#waveform: gaussian 0 1.25e9 rx_null\n\n")
 
-            # Shared python block: compute all 16 feed positions
-            f.write("## Antenna array (16 Hertzian dipoles at equatorial ring)\n")
+            # Antenna array: 16 z-directed wire dipoles
+            # Each dipole: two PEC arms along ±z (#edge), 10 mm per arm,
+            # 2 mm feed gap at equatorial plane.
+            # #transmission_line: z at gap, 73 Ω.
+            # All z-directed — no axis-snapping.
+            f.write("## Antenna array (16 z-directed wire dipoles at equatorial ring)\n")
             f.write("#python:\n")
             f.write("import math\n")
-            f.write(f"cell               = {cell}\n")
+            f.write(f"cell               = {0.002}\n")
             f.write(f"n_antennas         = {n_antennas}\n")
             f.write(f"head_center        = ({head_center[0]}, {head_center[1]}, {head_center[2]})\n")
             f.write(f"a                  = {head_semi_axes['a']}\n")
             f.write(f"b                  = {head_semi_axes['b']}\n")
             f.write(f"scalp_thickness    = {scalp_skull_thickness}\n")
             f.write(f"coupling_thickness = {coupling_thickness}\n")
-            f.write("antennas = []  # (cx, cy, cz, pol)\n")
+            f.write(f"arm                = {dipole_arm_len}\n")
+            f.write(f"gap                = {dipole_gap}\n")
+            f.write("antennas = []  # (cx, cy, cz)\n")
             f.write("for i in range(n_antennas):\n")
             f.write("    angle = 2 * math.pi * i / n_antennas\n")
             f.write("    cos_a = math.cos(angle)\n")
@@ -192,20 +199,19 @@ def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
             f.write("    cx = round((head_center[0] + r_x * cos_a) / cell) * cell\n")
             f.write("    cy = round((head_center[1] + r_y * sin_a) / cell) * cell\n")
             f.write("    cz = head_center[2]\n")
-            f.write("    pol = 'x' if abs(cos_a) >= abs(sin_a) else 'y'\n")
-            f.write("    antennas.append((cx, cy, cz, pol))\n")
+            f.write("    antennas.append((cx, cy, cz))\n")
             f.write("#end_python:\n\n")
 
-            # Per-antenna: hertzian_dipole + transmission_line at same point
+            # Per-antenna: PEC arms + transmission_line
             for ant_idx in range(n_antennas):
                 f.write(f"## Antenna {ant_idx+1}\n#python:\n")
-                f.write(f"cx, cy, cz, pol = antennas[{ant_idx}]\n")
+                f.write(f"cx, cy, cz = antennas[{ant_idx}]\n")
+                f.write("print(f'#edge: {cx} {cy} {round(cz-arm,6)} {cx} {cy} {round(cz-gap/2,6)} pec')\n")
+                f.write("print(f'#edge: {cx} {cy} {round(cz+gap/2,6)} {cx} {cy} {round(cz+arm,6)} pec')\n")
                 if ant_idx == src_idx:
-                    f.write("print(f'#hertzian_dipole: {pol} {cx} {cy} {cz} tx_pulse')\n")
-                    f.write("print(f'#transmission_line: {pol} {cx} {cy} {cz} 50 tx_pulse')\n")
+                    f.write(f"print(f'#transmission_line: z {{cx}} {{cy}} {{cz}} {dipole_tl_ohms} tx_pulse')\n")
                 else:
-                    f.write("print(f'#hertzian_dipole: {pol} {cx} {cy} {cz} rx_null')\n")
-                    f.write("print(f'#transmission_line: {pol} {cx} {cy} {cz} 50 rx_null')\n")
+                    f.write(f"print(f'#transmission_line: z {{cx}} {{cy}} {{cz}} {dipole_tl_ohms} rx_null')\n")
                 f.write("#end_python:\n\n")
 
 # ============================================================================

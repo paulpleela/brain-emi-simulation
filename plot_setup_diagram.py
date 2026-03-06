@@ -1,6 +1,7 @@
 """
 Generate a single annotated diagram of the brain-EMI simulation setup.
 Shows the equatorial (XY) cross-section with all tissue layers and all 16 antennas.
+Each antenna is a z-directed wire dipole: shown as a vertical ↕ bar at the feed point.
 """
 import math
 import numpy as np
@@ -18,6 +19,8 @@ scalp_thick        = 0.010
 gray_thick         = 0.003
 coupling_thick     = 0.005
 n_antennas         = 16
+dipole_arm_len     = 0.010          # 10 mm per arm
+dipole_gap         = 0.002          # 2 mm gap
 
 # ── Derived layer semi-axes ──────────────────────────────────────────────────
 layers = {
@@ -89,27 +92,29 @@ lesion = plt.Circle(m2cm([lesion_x, lesion_y]), m2cm(lesion_r),
                     color='#cc2222', zorder=7, label='Hemorrhage (blood, εᵣ=61)')
 ax.add_patch(lesion)
 
-# Antennas: point source dipoles — draw arrow from feed point inward + dot
-arrow_len_cm = 1.5  # visual arrow length for the diagram
+# Antennas: z-directed wire dipoles.
+# In the XY equatorial cross-section, the dipole arms go into/out of the page (±z).
+# Represent each as a vertical double-headed arrow (↕) in the diagram plane,
+# centred at the feed point, with length proportional to arm length scaled to diagram.
+arm_cm = dipole_arm_len * 100  # 10 mm → 1.0 cm in diagram
+gap_cm = dipole_gap * 100      # 2 mm → 0.2 cm
+
 for ant in antennas:
     cx_cm, cy_cm = m2cm(ant['cx']), m2cm(ant['cy'])
+
+    # Upper arm (toward +z, shown as upward bar)
+    ax.annotate('', xy=(cx_cm, cy_cm + arm_cm), xytext=(cx_cm, cy_cm + gap_cm / 2),
+                arrowprops=dict(arrowstyle='->', color='#0044cc', lw=1.5), zorder=9)
+    # Lower arm (toward -z, shown as downward bar)
+    ax.annotate('', xy=(cx_cm, cy_cm - arm_cm), xytext=(cx_cm, cy_cm - gap_cm / 2),
+                arrowprops=dict(arrowstyle='->', color='#0044cc', lw=1.5), zorder=9)
+    # Feed gap dot
+    ax.plot(cx_cm, cy_cm, 'o', color='#0044cc', ms=4, zorder=10,
+            markeredgecolor='#002288', markeredgewidth=0.5)
+
+    # Antenna number label (offset outward along radial direction)
     angle = ant['angle']
-    # Inward direction (toward head centre)
-    dx = -math.cos(angle) * arrow_len_cm
-    dy = -math.sin(angle) * arrow_len_cm
-
-    # Arrow: feed → inward (shows excitation direction)
-    ax.annotate('', xy=(cx_cm + dx, cy_cm + dy), xytext=(cx_cm, cy_cm),
-                arrowprops=dict(arrowstyle='->', color='#ee2200', lw=1.5),
-                zorder=9)
-
-    # Feed point dot
-    ax.plot(cx_cm, cy_cm, 'D', color='#ee2200', ms=4, zorder=10,
-            markeredgecolor='#990000', markeredgewidth=0.5)
-
-    # Antenna number label (offset outward)
     lx = head_cx + (a_head + scalp_thick + coupling_thick + 0.028) * math.cos(angle)
-    ly = head_cy + (b_head + scalp_thick + coupling_thick + 0.028) * math.sin(angle)
     ly = head_cy + (b_head + scalp_thick + coupling_thick + 0.028) * math.sin(angle)
     ax.text(m2cm(lx), m2cm(ly), str(ant['idx']),
             ha='center', va='center', fontsize=6.5, color='#222222',
@@ -126,10 +131,10 @@ legend_patches = [
     mpatches.Patch(fc='#e8e8f8', ec='#6060a0', label='White matter (εᵣ=38, σ=0.57 S/m)'),
     mpatches.Patch(fc='#80d0ff', ec='#0060b0', label='CSF ventricles (εᵣ=80, σ=2.0 S/m)'),
     mpatches.Patch(fc='#cc2222', ec='#cc2222', label='Hemorrhage / blood (εᵣ=61, σ=1.54 S/m)'),
-    plt.Line2D([0], [0], marker='D', color='w', markerfacecolor='#ee2200',
-               markersize=6, label='Hertzian dipole feed point'),
-    plt.Line2D([0], [0], color='#ee2200', lw=1.5,
-               label='Dipole polarisation / excitation direction'),
+    plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='#0044cc',
+               markersize=6, label='Dipole feed gap (TL, 73 Ω)'),
+    plt.Line2D([0], [0], color='#0044cc', lw=1.5,
+               label='Dipole arms ±z (10 mm each, PEC wire)'),
 ]
 ax.legend(handles=legend_patches, loc='lower right', fontsize=7.5,
           framealpha=0.92, edgecolor='#aaaaaa', title='Materials & elements', title_fontsize=8)
@@ -161,7 +166,7 @@ ax.set_xlabel('x  (cm) — anterior ↔ posterior', fontsize=10)
 ax.set_ylabel('y  (cm) — left ↔ right', fontsize=10)
 ax.set_title(
     'Brain-EMI simulation — equatorial cross-section (XY plane at z = 25 cm)\n'
-    '16 Hertzian dipole antennas  |  600×600×600 mm domain  |  2 mm grid  |  0–2 GHz',
+    '16 z-directed wire dipoles (22 mm, resonant ~1.25 GHz)  |  600×600×600 mm domain  |  2 mm grid  |  0.5–2 GHz',
     fontsize=10, pad=10
 )
 ax.grid(True, alpha=0.25, lw=0.5)

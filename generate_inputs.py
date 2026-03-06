@@ -3,17 +3,18 @@ Generate brain imaging input files with:
 - TRUE ellipsoidal head geometry (NOT spherical approximation)
 - CSF ventricles (left and right lateral ventricles)
 - Coupling medium between antennas and head
-- 0-2 GHz bandwidth
-- 16 Hertzian dipole antennas in circular array
+- 0.5-2 GHz bandwidth (centre 1.25 GHz)
+- 16 z-directed wire dipole antennas in circular array
 
-Each antenna is a gprMax #hertzian_dipole point source placed at the outer
-surface of the coupling layer.  The dipole polarisation is the Cartesian axis
-most aligned with the true radial direction toward the head centre (x or y),
-so the excitation field points directly into the head.  A co-located
-#transmission_line with the same polarisation records the incident/total
-voltages needed for S-parameter extraction.
+Each antenna is a physical half-wave wire dipole:
+  - Two PEC arms along ±z, each 10 mm long (#edge commands)
+  - 2 mm feed gap at the equatorial plane (z = head_centre_z)
+  - #transmission_line: z at the gap, 73 Ω, records V/I for S-params
+  - Total dipole length = 22 mm  (2 × 10 mm arms + 2 mm gap)
+  - Resonance in coupling medium (εᵣ=36): λ/4 @ 1.25 GHz ≈ 10 mm ✓
 
-No physical wires, no ground-plane slabs — no geometry penetrates the head.
+All 16 dipoles are z-directed — no axis-alignment ambiguity.
+Feed points sit at the outer surface of the coupling layer in the XY plane.
 
 Coupling medium: low-loss glycerol/water-like medium (εᵣ≈36, σ≈0.3 S/m).
 High εᵣ improves impedance matching to tissue; low σ avoids absorbing the
@@ -30,7 +31,8 @@ os.makedirs(output_dir, exist_ok=True)
 
 # Physical constants
 c0 = 3e8  # m/s
-f_max = 2e9  # 2 GHz (upper frequency)
+f_centre = 1.25e9  # 1.25 GHz — centre of 0.5-2 GHz band
+f_max = 2e9        # 2 GHz (upper frequency)
 
 # Grid cell size — all snapping uses this
 cell = 0.002  # 2 mm
@@ -59,15 +61,24 @@ coupling_eps_r = 36.0   # glycerol/water mixture, typical brain-imaging rig valu
 coupling_sigma = 0.3    # S/m — low loss, ~half the old 0.6 S/m value
 coupling_thickness = 0.005  # 5 mm layer
 
+# Wire dipole dimensions (z-directed, resonant in coupling medium at 1.25 GHz)
+# λ in coupling medium = c0 / (f_centre * sqrt(εᵣ)) = 300e6 / (1.25e9 * 6) = 40 mm
+# Half-wave dipole length ≈ 0.47λ ≈ 18.8 mm → use 22 mm (2×10 mm arms + 2 mm gap)
+# The coupling medium loads the dipole and lowers resonant frequency into 0.5-2 GHz band
+dipole_arm_len  = 0.010   # 10 mm per arm
+dipole_gap      = cell    # 2 mm feed gap (1 cell)
+dipole_tl_ohms  = 73      # Ω — half-wave dipole input impedance in free space
+
 n_antennas = 16
 
 print("="*70)
 print("BRAIN EMI SIMULATION PARAMETERS")
 print("="*70)
-print(f"\nFrequency range: 0 - 2 GHz")
-print(f"Antennas: {n_antennas} Hertzian dipoles (point sources, no physical wire)")
-print(f"  — polarised along dominant radial Cartesian axis (x or y)")
-print(f"  — feed at outer surface of coupling layer, pointing INTO the head")
+print(f"\nFrequency range: 0.5 - 2 GHz  (centre {f_centre/1e9:.2f} GHz)")
+print(f"Antennas: {n_antennas} z-directed wire dipoles (physical PEC arms)")
+print(f"  — arm length: {dipole_arm_len*1000:.0f} mm, gap: {dipole_gap*1000:.0f} mm, total: {(2*dipole_arm_len+dipole_gap)*1000:.0f} mm")
+print(f"  — TL impedance: {dipole_tl_ohms} Ohm")
+print(f"  — feed at outer surface of coupling layer, z-directed (no axis-snapping)")
 print(f"\nHead model: TRUE ELLIPSOIDAL GEOMETRY (not spherical)")
 print(f"  Semi-axes: a={head_semi_axes['a']*100:.1f} cm, b={head_semi_axes['b']*100:.1f} cm, c={head_semi_axes['c']*100:.1f} cm")
 print(f"  Scalp/skull thickness: {scalp_skull_thickness*1000:.0f} mm")
@@ -100,11 +111,11 @@ for src_idx in range(n_antennas):
         # Round-trip time ~3 ns, use 15 ns for safety
         f.write(f"#time_window: 15e-9\n\n")
         
-        # Waveforms - Gaussian centered at 1 GHz for 0-2 GHz bandwidth
+        # Waveforms - Gaussian centred at 1.25 GHz for 0.5-2 GHz bandwidth
         # rx_null: zero-amplitude waveform required for receiver transmission lines
-        f.write(f"## Waveforms (optimized for 0-2 GHz)\n")
-        f.write(f"#waveform: gaussian 1 1e9 tx_pulse\n")
-        f.write(f"#waveform: gaussian 0 1e9 rx_null\n\n")
+        f.write(f"## Waveforms (centred at 1.25 GHz for 0.5-2 GHz band)\n")
+        f.write(f"#waveform: gaussian 1 1.25e9 tx_pulse\n")
+        f.write(f"#waveform: gaussian 0 1.25e9 rx_null\n\n")
         
         # Materials
         f.write(f"## Materials\n")
@@ -236,22 +247,18 @@ for src_idx in range(n_antennas):
         f.write(f"#sphere: {lesion_x} {lesion_y} {lesion_z} 0.015 blood\n")
         f.write(f"#sphere: {lesion_x + 0.004} {lesion_y} {lesion_z} 0.01 blood\n\n")
 
-        # ── Antenna array: 16 Hertzian dipole point sources ───────────────────
-        # Each antenna feed is at the outer surface of the coupling layer,
-        # snapped to the nearest grid cell.
+        # ── Antenna array: 16 z-directed wire dipoles ─────────────────────────
+        # Each antenna is a physical half-wave dipole:
+        #   - Two PEC arms along ±z, each dipole_arm_len long (#edge)
+        #   - dipole_gap (1 cell) feed gap at the equatorial plane
+        #   - #transmission_line: z at the gap, dipole_tl_ohms Ω
         #
-        # Dipole polarisation = Cartesian axis most aligned with the true radial
-        # direction toward the head centre:
-        #   pol='x'  when |cos θ| ≥ |sin θ|   (antennas near ±X side)
-        #   pol='y'  when |sin θ|  > |cos θ|   (antennas near ±Y side)
+        # All dipoles are z-directed → no axis-snapping issue.
+        # The TX dipole uses tx_pulse; RX dipoles use rx_null (zero amplitude,
+        # TL still records induced V/I for S-parameter extraction).
         #
-        # A #hertzian_dipole is a point source — no physical wire, no ground
-        # plane, nothing penetrates the head.  The co-located #transmission_line
-        # (same polarisation) records V and I for S-parameter extraction.
-        #
-        # Compute all 16 feed positions once in a #python: block, store in
-        # 'antennas' list, then emit the two gprMax commands per antenna.
-        f.write(f"## Antenna array (16 Hertzian dipoles at equatorial ring)\n")
+        # Compute feed positions in a #python: block, then emit per-antenna.
+        f.write(f"## Antenna array (16 z-directed wire dipoles at equatorial ring)\n")
         f.write(f"#python:\n")
         f.write(f"import math\n")
         f.write(f"cell               = {cell}\n")
@@ -261,37 +268,37 @@ for src_idx in range(n_antennas):
         f.write(f"b                  = {head_semi_axes['b']}\n")
         f.write(f"scalp_thickness    = {scalp_skull_thickness}\n")
         f.write(f"coupling_thickness = {coupling_thickness}\n")
-        f.write(f"antennas = []  # (cx, cy, cz, pol)\n")
+        f.write(f"arm                = {dipole_arm_len}\n")
+        f.write(f"gap                = {dipole_gap}\n")
+        f.write(f"antennas = []  # (cx, cy, cz)\n")
         f.write(f"for i in range(n_antennas):\n")
         f.write(f"    angle = 2 * math.pi * i / n_antennas\n")
         f.write(f"    cos_a = math.cos(angle)\n")
         f.write(f"    sin_a = math.sin(angle)\n")
-        f.write(f"    # Feed at outer surface of coupling layer, snapped to grid\n")
         f.write(f"    r_x = a + scalp_thickness + coupling_thickness + cell\n")
         f.write(f"    r_y = b + scalp_thickness + coupling_thickness + cell\n")
         f.write(f"    cx = round((head_center[0] + r_x * cos_a) / cell) * cell\n")
         f.write(f"    cy = round((head_center[1] + r_y * sin_a) / cell) * cell\n")
         f.write(f"    cz = head_center[2]\n")
-        f.write(f"    # Dominant Cartesian axis for this feed position\n")
-        f.write(f"    pol = 'x' if abs(cos_a) >= abs(sin_a) else 'y'\n")
-        f.write(f"    antennas.append((cx, cy, cz, pol))\n")
+        f.write(f"    antennas.append((cx, cy, cz))\n")
         f.write(f"#end_python:\n\n")
 
-        # Per-antenna commands: hertzian_dipole (source/field) + transmission_line (measurement)
-        f.write(f"## Antenna array - 16 Hertzian dipoles\n")
+        # Per-antenna commands: PEC arms + transmission_line
+        f.write(f"## Antenna array - 16 z-directed wire dipoles\n")
         for ant_idx in range(n_antennas):
             ant_num = ant_idx + 1
             f.write(f"\n## Antenna {ant_num}\n")
             f.write(f"#python:\n")
-            f.write(f"cx, cy, cz, pol = antennas[{ant_idx}]\n")
-            # TX antenna: Hertzian dipole drives the field; TL records V/I
+            f.write(f"cx, cy, cz = antennas[{ant_idx}]\n")
+            # PEC arms: lower arm (cz-arm to cz-gap/2) and upper arm (cz+gap/2 to cz+arm)
+            f.write("print(f'#edge: {cx} {cy} {round(cz-arm,6)} {cx} {cy} {round(cz-gap/2,6)} pec')\n")
+            f.write("print(f'#edge: {cx} {cy} {round(cz+gap/2,6)} {cx} {cy} {round(cz+arm,6)} pec')\n")
             if ant_idx == src_idx:
-                f.write("print(f'#hertzian_dipole: {pol} {cx} {cy} {cz} tx_pulse')\n")
-                f.write("print(f'#transmission_line: {pol} {cx} {cy} {cz} 50 tx_pulse')\n")
-            # RX antenna: zero-amplitude dipole (no excitation); TL records induced V/I
+                # TX: transmission line drives and records at feed gap
+                f.write(f"print(f'#transmission_line: z {{cx}} {{cy}} {{cz}} {dipole_tl_ohms} tx_pulse')\n")
             else:
-                f.write("print(f'#hertzian_dipole: {pol} {cx} {cy} {cz} rx_null')\n")
-                f.write("print(f'#transmission_line: {pol} {cx} {cy} {cz} 50 rx_null')\n")
+                # RX: zero-amplitude waveform; TL records induced V/I
+                f.write(f"print(f'#transmission_line: z {{cx}} {{cy}} {{cz}} {dipole_tl_ohms} rx_null')\n")
             f.write("#end_python:\n")
 
         f.write(f"\n## End of input file\n")
