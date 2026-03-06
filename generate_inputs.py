@@ -7,11 +7,12 @@ Generate brain imaging input files with:
 - 16 z-directed wire dipole antennas in circular array
 
 Each antenna is a physical half-wave wire dipole:
-  - Two PEC arms along ±z, each 10 mm long (#edge commands)
-  - 2 mm feed gap at the equatorial plane (z = head_centre_z)
-  - #transmission_line: z at the gap, 73 Ω, records V/I for S-params
-  - Total dipole length = 22 mm  (2 × 10 mm arms + 2 mm gap)
+  - One continuous PEC edge from (cz - arm) to (cz + arm + gap) — full dipole length
+  - One free_space edge overwriting the gap cell from cz to (cz + gap) — the feed gap
+  - #transmission_line: z at cz, 73 Ω, records V/I for S-params
+  - Total dipole length = 2*arm + gap = 22 mm  (2 × 10 mm arms + 2 mm gap)
   - Resonance in coupling medium (εᵣ=36): λ/4 @ 1.25 GHz ≈ 10 mm ✓
+  - Method matches gprMax wire dipole example (antenna_wire_dipole_fs.in)
 
 All 16 dipoles are z-directed — no axis-alignment ambiguity.
 Feed points sit at the outer surface of the coupling layer in the XY plane.
@@ -283,21 +284,25 @@ for src_idx in range(n_antennas):
         f.write(f"    antennas.append((cx, cy, cz))\n")
         f.write(f"#end_python:\n\n")
 
-        # Per-antenna commands: PEC arms + transmission_line
+        # Per-antenna commands: full PEC edge + free_space gap + transmission_line
+        # Method from gprMax docs (antenna_wire_dipole_fs.in):
+        #   1. One continuous #edge spanning the full dipole length (PEC)
+        #   2. One #edge overwriting the gap cell with free_space
+        #   3. #transmission_line: z at the gap start coordinate
         f.write(f"## Antenna array - 16 z-directed wire dipoles\n")
         for ant_idx in range(n_antennas):
             ant_num = ant_idx + 1
             f.write(f"\n## Antenna {ant_num}\n")
             f.write(f"#python:\n")
             f.write(f"cx, cy, cz = antennas[{ant_idx}]\n")
-            # PEC arms: lower arm (cz-arm to cz-gap/2) and upper arm (cz+gap/2 to cz+arm)
-            f.write("print(f'#edge: {cx} {cy} {round(cz-arm,6)} {cx} {cy} {round(cz-gap/2,6)} pec')\n")
-            f.write("print(f'#edge: {cx} {cy} {round(cz+gap/2,6)} {cx} {cy} {round(cz+arm,6)} pec')\n")
+            # Full dipole: one PEC edge from bottom of lower arm to top of upper arm
+            f.write("print(f'#edge: {cx} {cy} {round(cz-arm,6)} {cx} {cy} {round(cz+arm+gap,6)} pec')\n")
+            # Carve out the gap cell with free_space (gap is 1 cell = gap wide)
+            f.write("print(f'#edge: {cx} {cy} {round(cz,6)} {cx} {cy} {round(cz+gap,6)} free_space')\n")
+            # TL attaches at the start of the gap cell
             if ant_idx == src_idx:
-                # TX: transmission line drives and records at feed gap
                 f.write(f"print(f'#transmission_line: z {{cx}} {{cy}} {{cz}} {dipole_tl_ohms} tx_pulse')\n")
             else:
-                # RX: zero-amplitude waveform; TL records induced V/I
                 f.write(f"print(f'#transmission_line: z {{cx}} {{cy}} {{cz}} {dipole_tl_ohms} rx_null')\n")
             f.write("#end_python:\n")
 

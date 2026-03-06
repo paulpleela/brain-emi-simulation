@@ -202,12 +202,19 @@ def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
             f.write("    antennas.append((cx, cy, cz))\n")
             f.write("#end_python:\n\n")
 
-            # Per-antenna: PEC arms + transmission_line
+            # Per-antenna: full PEC edge + free_space gap + transmission_line
+            # Method from gprMax docs (antenna_wire_dipole_fs.in):
+            #   1. One continuous #edge spanning the full dipole length (PEC)
+            #   2. One #edge overwriting the gap cell with free_space
+            #   3. #transmission_line: z at the gap start coordinate
             for ant_idx in range(n_antennas):
                 f.write(f"## Antenna {ant_idx+1}\n#python:\n")
                 f.write(f"cx, cy, cz = antennas[{ant_idx}]\n")
-                f.write("print(f'#edge: {cx} {cy} {round(cz-arm,6)} {cx} {cy} {round(cz-gap/2,6)} pec')\n")
-                f.write("print(f'#edge: {cx} {cy} {round(cz+gap/2,6)} {cx} {cy} {round(cz+arm,6)} pec')\n")
+                # Full dipole: one PEC edge from bottom to top
+                f.write("print(f'#edge: {cx} {cy} {round(cz-arm,6)} {cx} {cy} {round(cz+arm+gap,6)} pec')\n")
+                # Carve out gap cell with free_space
+                f.write("print(f'#edge: {cx} {cy} {round(cz,6)} {cx} {cy} {round(cz+gap,6)} free_space')\n")
+                # TL at gap start
                 if ant_idx == src_idx:
                     f.write(f"print(f'#transmission_line: z {{cx}} {{cy}} {{cz}} {dipole_tl_ohms} tx_pulse')\n")
                 else:
