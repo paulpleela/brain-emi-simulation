@@ -8,6 +8,8 @@ For each scenario:
       a_j = (V_j + Z0*I_j) / (2*sqrt(Z0))   <- incident wave at port j
       b_i = (V_i - Z0*I_i) / (2*sqrt(Z0))   <- reflected/transmitted wave at port i
       S_ij = b_i / a_j                        <- column j of S-matrix from tx_j simulation
+  - Reference impedance Z0 = 73 Ω (matches the dipole #transmission_line)
+  - Frequency range kept: 0.5 – 2.0 GHz (strips DC and sub-band noise)
   - Saves one .s16p Touchstone file per scenario
   - Deletes the 16 .out files to save disk space
 
@@ -35,7 +37,8 @@ import glob
 INPUT_DIR   = "brain_inputs"    # where .out files live
 OUTPUT_DIR  = "sparams"         # where .s16p files will be saved
 N_PORTS     = 16
-Z0          = 50.0              # reference impedance (Ohms)
+Z0          = 73.0              # reference impedance (Ohms) — matches dipole TL
+F_MIN       = 0.5e9             # min frequency to keep (Hz) — strip DC / sub-band noise
 F_MAX       = 2e9               # max frequency to keep (Hz)
 DELETE_OUT  = False              # delete .out files after successful extraction
 
@@ -118,7 +121,7 @@ def compute_s_matrix(scenario_id):
         # Build frequency axis on first file
         if freqs is None:
             all_freqs = np.fft.rfftfreq(n_it, dt)
-            freq_mask = all_freqs <= F_MAX
+            freq_mask = (all_freqs >= F_MIN) & (all_freqs <= F_MAX)
             freqs     = all_freqs[freq_mask]
             n_freq    = len(freqs)
             S         = np.zeros((N_PORTS, N_PORTS, n_freq), dtype=complex)
