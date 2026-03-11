@@ -10,9 +10,10 @@ Each antenna is a physical half-wave wire dipole:
   - One continuous PEC edge from (cz - arm) to (cz + arm + gap) — full dipole length
   - One free_space edge overwriting the gap cell from cz to (cz + gap) — the feed gap
   - #transmission_line: z at cz, 73 Ω, records V/I for S-params
-  - Total dipole length = 2*arm + gap = 22 mm  (2 × 10 mm arms + 2 mm gap)
-  - Resonance in coupling medium (εᵣ=36): λ/4 @ 1.25 GHz ≈ 10 mm ✓
+  - arm = 56 mm, gap = 2 mm, total = 114 mm
+  - Resonance in free space: 0.475 × c / (114mm) ≈ 1.25 GHz ✓
   - Method matches gprMax wire dipole example (antenna_wire_dipole_fs.in)
+  - Time window = 60 ns → Δf = 17 MHz (~88 pts in 0.5-2 GHz)
 
 All 16 dipoles are z-directed — no axis-alignment ambiguity.
 Feed points sit at the outer surface of the coupling layer in the XY plane.
@@ -62,11 +63,13 @@ coupling_eps_r = 36.0   # glycerol/water mixture, typical brain-imaging rig valu
 coupling_sigma = 0.3    # S/m — low loss, ~half the old 0.6 S/m value
 coupling_thickness = 0.005  # 5 mm layer
 
-# Wire dipole dimensions (z-directed, resonant in coupling medium at 1.25 GHz)
-# λ in coupling medium = c0 / (f_centre * sqrt(εᵣ)) = 300e6 / (1.25e9 * 6) = 40 mm
-# Half-wave dipole length ≈ 0.47λ ≈ 18.8 mm → use 22 mm (2×10 mm arms + 2 mm gap)
-# The coupling medium loads the dipole and lowers resonant frequency into 0.5-2 GHz band
-dipole_arm_len  = 0.010   # 10 mm per arm
+# Wire dipole dimensions (z-directed, resonant in free space ~1.25 GHz)
+# Antennas sit OUTSIDE the coupling medium in free space.
+# λ/2 in free space at 1.25 GHz = 120 mm → 0.475λ arms ≈ 57 mm each.
+# Total dipole = 2×57 mm + 2 mm gap = 116 mm.
+# Official gprMax example: 150mm total → resonance at 950 MHz in free space.
+# Our 116mm total → resonance ~950 * (150/116) ≈ 1.23 GHz — right in band.
+dipole_arm_len  = 0.056   # 56 mm per arm (28 cells @ 2mm grid — stays integer cells)
 dipole_gap      = cell    # 2 mm feed gap (1 cell)
 dipole_tl_ohms  = 73      # Ω — half-wave dipole input impedance in free space
 
@@ -110,7 +113,7 @@ for src_idx in range(n_antennas):
         # Need enough time for signal to propagate through head and back
         # Head diameter ~20 cm, velocity in tissue ~c/sqrt(50) ≈ 0.14c
         # Round-trip time ~3 ns, use 15 ns for safety
-        f.write(f"#time_window: 15e-9\n\n")
+        f.write(f"#time_window: 60e-9\n\n")
         
         # Waveforms - Gaussian centred at 1.25 GHz for 0.5-2 GHz bandwidth
         # rx_null: zero-amplitude waveform required for receiver transmission lines

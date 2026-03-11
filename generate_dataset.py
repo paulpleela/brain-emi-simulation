@@ -30,8 +30,12 @@ coupling_sigma = 0.3
 coupling_thickness = 0.005
 n_antennas = 16
 
-# Wire dipole dimensions (z-directed, resonant in coupling medium at 1.25 GHz)
-dipole_arm_len = 0.010   # 10 mm per arm
+# Wire dipole dimensions (z-directed, resonant in free space ~1.25 GHz)
+# Antennas sit OUTSIDE the coupling medium in free space.
+# λ/2 in free space at 1.25 GHz = 120 mm → 0.475λ arms ≈ 57 mm each.
+# Use 56 mm (28 cells) for exact grid alignment. Total = 2×56 + 2 = 114 mm.
+# Expected resonance: 0.475 × c / 0.114 = 1.25 GHz in free space ✓
+dipole_arm_len = 0.056   # 56 mm per arm (exactly 28 cells @ 2mm grid)
 dipole_gap     = 0.002   # 2 mm feed gap (1 cell)
 dipole_tl_ohms = 73      # Ω — half-wave dipole input impedance
 
@@ -101,7 +105,7 @@ def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
             # Domain and waveform
             f.write("#domain: 0.6 0.6 0.6\n")
             f.write("#dx_dy_dz: 0.002 0.002 0.002\n")
-            f.write("#time_window: 15e-9\n\n")
+            f.write("#time_window: 60e-9\n\n")
             
             # Materials
             f.write("## Materials\n")
