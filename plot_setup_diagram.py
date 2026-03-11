@@ -19,8 +19,8 @@ scalp_thick        = 0.010
 gray_thick         = 0.003
 coupling_thick     = 0.005
 n_antennas         = 16
-dipole_arm_len     = 0.010          # 10 mm per arm
-dipole_gap         = 0.002          # 2 mm gap
+dipole_arm_len     = 0.056          # 56 mm per arm (resonance 1.25 GHz in free space)
+dipole_gap         = 0.002          # 2 mm gap (1 cell)
 
 # ── Derived layer semi-axes ──────────────────────────────────────────────────
 layers = {
@@ -96,7 +96,8 @@ ax.add_patch(lesion)
 # In the XY equatorial cross-section, the dipole arms go into/out of the page (±z).
 # Represent each as a vertical double-headed arrow (↕) in the diagram plane,
 # centred at the feed point, with length proportional to arm length scaled to diagram.
-arm_cm = dipole_arm_len * 100  # 10 mm → 1.0 cm in diagram
+# Physical arm = 56 mm → scale to 2.0 cm in diagram (fits without overlap).
+arm_cm = 2.0   # visual length per arm in diagram (cm)  — physical: 56 mm each
 gap_cm = dipole_gap * 100      # 2 mm → 0.2 cm
 
 for ant in antennas:
@@ -134,7 +135,7 @@ legend_patches = [
     plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='#0044cc',
                markersize=6, label='Dipole feed gap (TL, 73 Ω)'),
     plt.Line2D([0], [0], color='#0044cc', lw=1.5,
-               label='Dipole arms ±z (10 mm each, PEC wire)'),
+               label='Dipole arms ±z (56 mm each, PEC wire)'),
 ]
 ax.legend(handles=legend_patches, loc='lower right', fontsize=7.5,
           framealpha=0.92, edgecolor='#aaaaaa', title='Materials & elements', title_fontsize=8)
@@ -166,7 +167,7 @@ ax.set_xlabel('x  (cm) — anterior ↔ posterior', fontsize=10)
 ax.set_ylabel('y  (cm) — left ↔ right', fontsize=10)
 ax.set_title(
     'Brain-EMI simulation — equatorial cross-section (XY plane at z = 25 cm)\n'
-    '16 z-directed wire dipoles (22 mm, resonant ~1.25 GHz)  |  600×600×600 mm domain  |  2 mm grid  |  0.5–2 GHz',
+    '16 z-directed wire dipoles (114 mm total, resonant 1.25 GHz)  |  600×600×600 mm domain  |  2 mm grid  |  0.5–2 GHz  |  60 ns / 90 pts',
     fontsize=10, pad=10
 )
 ax.grid(True, alpha=0.25, lw=0.5)
