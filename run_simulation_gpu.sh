@@ -7,6 +7,7 @@
 #SBATCH --time=00:15:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
+#SBATCH --mem=32G
 #SBATCH --gres=gpu:1
 
 # GPU-accelerated HPC job array script for gprMax brain imaging on Rangpur
