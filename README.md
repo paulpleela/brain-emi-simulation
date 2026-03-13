@@ -1,223 +1,879 @@
-# Brain EMI Simulation for Stroke Detection# Brain EMI Simulation for Stroke Detection# Brain EMI Simulation for Stroke Detection
+# Brain EMI Simulation for Stroke Detection# Brain EMI Simulation for Stroke Detection# Brain EMI Simulation for Stroke Detection# Brain EMI Simulation for Stroke Detection# Brain EMI Simulation for Stroke Detection# Brain EMI Simulation for Stroke Detection
 
 
+
+Electromagnetic imaging simulation for brain hemorrhage detection using gprMax FDTD solver.
+
+Generates S-parameter data for deep learning model training.
 
 Electromagnetic imaging simulation for brain hemorrhage detection using gprMax FDTD solver. Generates S-parameter data for deep learning model training.
 
-
-
----Electromagnetic imaging simulation for brain hemorrhage detection using gprMax FDTD solver. Generates S-parameter data for deep learning model training.Electromagnetic imaging simulation for brain hemorrhage detection using gprMax FDTD solver. Generates S-parameter data for deep learning model training.
+---
 
 
 
 ## Project Status
 
+---Electromagnetic imaging simulation for brain hemorrhage detection using gprMax FDTD solver. Generates S-parameter data for deep learning model training.
 
+- TRUE ellipsoidal head geometry (voxelized, not spherical)
 
-✅ TRUE ellipsoidal head geometry (voxelized, not spherical)  ------
+- CSF ventricles included (left + right lateral ventricles, er=80)
 
-✅ CSF ventricles included (left + right lateral ventricles, εr=80)  
+- 16-antenna wire dipole array (z-directed, 114 mm, resonant at 1.25 GHz)
 
-✅ 16-antenna wire dipole array (z-directed, 114 mm, resonant at 1.25 GHz)  
+- S-parameter extractor (extract_sparameters.py, Z0=73 ohm, 0.5-2 GHz)## Project Status
 
-✅ S-parameter extractor (`extract_sparameters.py`, Z0=73 Ω, 0.5–2 GHz)  
+- S-parameter visualiser (visualise_s16p.py, return loss + transmission)
 
-✅ S-parameter visualiser (`visualise_s16p.py`, return loss + transmission)  ## Project Status## Project Status
+- HPC-ready (SLURM job scripts for CPU and GPU on Rangpur)
 
-✅ HPC-ready (SLURM script configured for Rangpur)  
+- Confirmed working: 90 frequency points, 0.517-2.000 GHz, R 73
 
-✅ Confirmed working: 90 frequency points, 0.517–2.000 GHz, R 73  
-
-🔲 Expanded dataset (1,360 scenarios) — see `DATASET_PLAN.md`
-
-✅ **TRUE ellipsoidal head geometry** (voxelized, not spherical)  ✅ **TRUE ellipsoidal head geometry** (voxelized, NOT spherical)  
-
----
-
-✅ **CSF ventricles included** (left + right lateral ventricles, εr=80)  ✅ **CSF ventricles included** (left + right lateral ventricles, εr=80)  
-
-## Repository Structure
-
-✅ **300-scenario dataset** (50 healthy + 250 hemorrhage)  ✅ **300-scenario dataset** (50 healthy + 250 hemorrhage)  
-
-| File / Folder | Purpose |
-
-|---|---|✅ **16-antenna wire dipole array** (z-directed, 114 mm, resonant at 1.25 GHz)  ✅ **16-antenna monopole array** (circular arrangement, 37.5mm λ/4 monopoles)  
-
-| `generate_dataset.py` | Generate all scenario `.in` files |
-
-| `generate_inputs.py` | Generate 16 smoke-test files (`brain_tx*.in`) |✅ **S-parameter extractor** (`extract_sparameters.py`, Z₀=73 Ω, 0.5–2 GHz)  ✅ **HPC-ready** (SLURM script configured for Rangpur)
-
-| `extract_sparameters.py` | HDF5 `.out` → 16×16 S-matrix → `.s16p` |
-
-| `visualise_s16p.py` | Plot S-parameters from `.s16p` |✅ **S-parameter visualiser** (`visualise_s16p.py`, return loss + transmission)  
-
-| `validate_s16p.py` | Validate Touchstone file structure |
-
-| `generate_metadata.py` | Create ML metadata CSV |✅ **HPC-ready** (SLURM script configured for Rangpur)  ---
-
-| `plot_setup_diagram.py` | Generate `setup_diagram.png` annotated figure |
-
-| `dataset_metadata.csv` | Scenario parameters and train/val/test splits |✅ **Confirmed working**: 90 frequency points, 0.517–2.000 GHz, R 73
-
-| `run_simulation.sh` | SLURM job script for HPC |
-
-| `brain_inputs/` | Generated `.in` input files (not committed) |## Dataset Overview
-
-| `sparams/` | Extracted `.s16p` files and visualisation PNGs |
-
-| `DATASET_PLAN.md` | Full specification for the 1,360-scenario dataset |---
-
-| `HPC_GUIDE.md` | Complete HPC deployment instructions |
-
-| `gprMax/` | gprMax FDTD solver source code |**Total**: 300 scenarios for ML training
-
-
-## Quick Start
+- Expanded dataset (1,360 scenarios) planned -- see DATASET_PLAN.md- TRUE ellipsoidal head geometry (voxelized, not spherical)---Electromagnetic imaging simulation for brain hemorrhage detection using gprMax FDTD solver. Generates S-parameter data for deep learning model training.
 
 
 
-### Planned (1,360 scenarios — see `DATASET_PLAN.md`)  YZ-plane cross-section  (one dipole, side view)
+---- CSF ventricles included (left + right lateral ventricles, er=80)
 
 
 
-| Group | Scenarios | Notes |  ────────────────────────────────────────────────### Generate Dataset
-
-|---|---|---|
-
-| Healthy | 135 | 27 anatomy configs × 5 tilt angles |
-
-| Hemorrhage | 1,225 | 5 sizes × 35 locations × 7 anatomy configs |
-
-| **Total** | **1,360** | 21,760 `.in` files |   z = 0.308 m ----  top of upper PEC arm```bash
+## Repository Structure- 16-antenna wire dipole array (z-directed, 114 mm, resonant at 1.25 GHz)
 
 
 
-Split: 80% train / 10% val / 10% test → **1,088 training scenarios**                      |  PEC wire# Generate all 300 scenarios (4800 files)
+| File / Folder | Purpose |- S-parameter extractor (extract_sparameters.py, Z0=73 ohm, 0.5-2 GHz)
+
+|---|---|
+
+| generate_dataset.py | Generate all scenario .in files |- S-parameter visualiser (visualise_s16p.py, return loss + transmission)## Project Status
+
+| generate_inputs.py | Generate 16 smoke-test files (brain_tx*.in) |
+
+| extract_sparameters.py | HDF5 .out to 16x16 S-matrix to .s16p |- HPC-ready (SLURM job scripts for CPU and GPU on Rangpur)
+
+| visualise_s16p.py | Plot S-parameters from .s16p |
+
+| validate_s16p.py | Validate Touchstone file structure |- Confirmed working: 90 frequency points, 0.517-2.000 GHz, R 73
+
+| generate_metadata.py | Create ML metadata CSV |
+
+| plot_setup_diagram.py | Generate setup_diagram.png annotated figure |- Expanded dataset (1,360 scenarios) planned -- see DATASET_PLAN.md
+
+| dataset_metadata.csv | Scenario parameters and train/val/test splits |
+
+| run_simulation.sh | SLURM job script (CPU, cpu partition) |✅ TRUE ellipsoidal head geometry (voxelized, not spherical)---Electromagnetic imaging simulation for brain hemorrhage detection using gprMax FDTD solver. Generates S-parameter data for deep learning model training.Electromagnetic imaging simulation for brain hemorrhage detection using gprMax FDTD solver. Generates S-parameter data for deep learning model training.
+
+| run_simulation_gpu.sh | SLURM job script (GPU, a100 partition) -- recommended |
+
+| brain_inputs/ | Generated .in input files (not committed to git) |---
+
+| sparams/ | Extracted .s16p files and visualisation PNGs |
+
+| DATASET_PLAN.md | Full specification for the 1,360-scenario dataset |✅ CSF ventricles included (left + right lateral ventricles, εr=80)
+
+| HPC_GUIDE.md | Complete HPC deployment instructions |
+
+| gprMax/ | gprMax FDTD solver source code |## Repository Structure
 
 
 
----                      |  (56 mm upper arm, 28 cells)python generate_dataset.py
+---✅ 16-antenna wire dipole array (z-directed, 114 mm, resonant at 1.25 GHz)
 
 
 
-## Simulation Parameters   z = 0.252 m ----  top of feed gap   (cz + gap)
+## Dataset| File / Folder | Purpose |
 
 
 
-| Parameter | Value | Notes |                   [==TL==]  <-- #transmission_line: z  73 ohm  waveform# Generate metadata CSV
+### Current (300 scenarios)|---|---|✅ S-parameter extractor (`extract_sparameters.py`, Z0=73 Ω, 0.5–2 GHz)
+
+
+
+| Group | Scenarios | Notes || generate_dataset.py | Generate all scenario .in files |
 
 |---|---|---|
 
-| Domain | 600×600×600 mm | Cubic |                      |      feed gap = 2 mm = 1 cellpython generate_metadata.py
+| Healthy | 50 | Single anatomy, no tilt || generate_inputs.py | Generate 16 smoke-test files (brain_tx*.in) |✅ S-parameter visualiser (`visualise_s16p.py`, return loss + transmission)## Project Status
 
-| Grid resolution | 2 mm | λ/10 at ~1.5 GHz |
+| Hemorrhage | 250 | 5 sizes x 50 positions |
 
-| Time window | 60 ns | Δf = 16.7 MHz → ~90 frequency points |   z = 0.250 m ----  feed point  cz  (TL placed here)```
+| Total | 300 | 4,800 .in files || extract_sparameters.py | HDF5 .out to 16x16 S-matrix to .s16p |
 
-| Waveform | Gaussian, centre 1.25 GHz | Covers 0.5–2 GHz band |
 
-| Antennas | 16 z-directed wire dipoles | Physical PEC arms |                      |  free_space edge overwrites PEC in gap zone
+
+Split: 70% train / 15% val / 15% test| visualise_s16p.py | Plot S-parameters from .s16p |✅ HPC-ready (SLURM job scripts for CPU and GPU on Rangpur)
+
+
+
+### Planned (1,360 scenarios -- see DATASET_PLAN.md)| validate_s16p.py | Validate Touchstone file structure |
+
+
+
+| Group | Scenarios | Notes || generate_metadata.py | Create ML metadata CSV |✅ Confirmed working: 90 frequency points, 0.517–2.000 GHz, R 73
+
+|---|---|---|
+
+| Healthy | 135 | 27 anatomy configs x 5 tilt angles || plot_setup_diagram.py | Generate setup_diagram.png annotated figure |
+
+| Hemorrhage | 1,225 | 5 sizes x 35 locations x 7 anatomy configs |
+
+| Total | 1,360 | 21,760 .in files || dataset_metadata.csv | Scenario parameters and train/val/test splits |🔲 Expanded dataset (1,360 scenarios) — see `DATASET_PLAN.md`
+
+
+
+Split: 80% train / 10% val / 10% test -- 1,088 training scenarios| run_simulation.sh | SLURM job script (CPU, cpu partition) |
+
+
+
+---| run_simulation_gpu.sh | SLURM job script (GPU, a100 partition) -- recommended |✅ TRUE ellipsoidal head geometry (voxelized, not spherical)  ------
+
+
+
+## Simulation Parameters| brain_inputs/ | Generated .in input files (not committed) |
+
+
+
+| Parameter | Value | Notes || sparams/ | Extracted .s16p files and visualisation PNGs |---
+
+|---|---|---|
+
+| Domain | 600x600x600 mm | Cubic || DATASET_PLAN.md | Full specification for the 1,360-scenario dataset |
+
+| Grid resolution | 2 mm | lambda/10 at ~1.5 GHz |
+
+| Time window | 60 ns | delta-f = 16.7 MHz, ~90 frequency points || HPC_GUIDE.md | Complete HPC deployment instructions |✅ CSF ventricles included (left + right lateral ventricles, εr=80)  
+
+| Waveform | Gaussian, centre 1.25 GHz | Covers 0.5-2 GHz band |
+
+| Antennas | 16 z-directed wire dipoles | Physical PEC arms || gprMax/ | gprMax FDTD solver source code |
 
 | Dipole arm length | 56 mm (28 cells) | Resonance at 1.250 GHz in free space |
 
-| Feed gap | 2 mm (1 cell) | Carved with `free_space` override |                      |  PEC wire### Run on HPC
+| Feed gap | 2 mm (1 cell) | Carved with free_space override |## Repository Structure
 
-| Total dipole length | 114 mm | z: 0.194–0.308 m |
+| Total dipole length | 114 mm | z: 0.194-0.308 m |
 
-| TL impedance | 73 Ω | Half-wave dipole impedance |                      |  (56 mm lower arm, 28 cells)
+| TL impedance | 73 ohm | Half-wave dipole impedance |---
 
-| Confirmed frequency points | 90 | 0.517–2.000 GHz, scenario_001 |
+| Confirmed frequency points | 90 | 0.517-2.000 GHz, scenario_001 |
 
-   z = 0.194 m ----  bottom of lower PEC armSee **`HPC_GUIDE.md`** for complete instructions.
+✅ 16-antenna wire dipole array (z-directed, 114 mm, resonant at 1.25 GHz)  
 
 ---
 
-
+## Dataset
 
 ## Head Model
 
-   Total dipole: 0.194 -> 0.308 m = 114 mm**Summary**:
+| File / Folder | Purpose |
 
-**Geometry**: Voxelized ellipsoidal layers at 2 mm resolution
+Geometry: Voxelized ellipsoidal layers at 2 mm resolution
 
-   ┌─────────────────────────────────────────────────────────────┐1. Push code: `git push origin main`
+### Current (300 scenarios)
 
-**Semi-axes** (average adult):
+Semi-axes (average adult): a=9.5 cm (front-back), b=7.5 cm (left-right), c=11.5 cm (top-bottom)
 
-- a = 9.5 cm (front-back)   │  #edge: cx cy 0.194  cx cy 0.308  pec          <- full wire  │2. SSH to Rangpur
+|---|---|✅ S-parameter extractor (`extract_sparameters.py`, Z0=73 Ω, 0.5–2 GHz)  
 
-- b = 7.5 cm (left-right)
+Tissue layers (outside to inside):
 
-- c = 11.5 cm (top-bottom)   │  #edge: cx cy 0.250  cx cy 0.252  free_space   <- carve gap  │3. Pull code: `cd ~/brain-emi-simulation && git pull`
+| Group | Scenarios | Notes |
 
+| Layer | er | sigma S/m | Thickness |
 
+|---|---|---|---||---|---|---|| `generate_dataset.py` | Generate all scenario `.in` files |
 
-**Tissue layers** (outside → inside):   │  #transmission_line: z cx cy 0.250  73  waveform            │4. Setup (first time): `conda env create -f gprMax/conda_env.yml`
+| Coupling medium (glycerol/water) | 36 | 0.3 | 5 mm |
 
-
-
-| Layer | εr | σ (S/m) | Thickness |   └─────────────────────────────────────────────────────────────┘5. Test: `python -m gprMax brain_inputs/scenario_001_tx01.in -n 8`
-
-|---|---|---|---|
-
-| Coupling medium (glycerol/water) | 36 | 0.3 | 5 mm |6. Run all: `sbatch run_simulation.sh`
-
-| Scalp + skull | 12 | 0.2 | 10 mm |
+| Scalp + skull | 12 | 0.2 | 10 mm || Healthy | 50 | Single anatomy, no tilt |
 
 | Gray matter (cortex) | 52 | 0.97 | 3 mm |
 
+| White matter (core) | 38 | 0.57 | fills interior || Hemorrhage | 250 | 5 sizes x 50 positions || `generate_inputs.py` | Generate 16 smoke-test files (`brain_tx*.in`) |✅ S-parameter visualiser (`visualise_s16p.py`, return loss + transmission)  ## Project Status## Project Status
+
+| CSF ventricles | 80 | 2.0 | 2x1x4 cm ellipsoids |
+
+| Total | 300 | 4,800 .in files |
+
+Hemorrhage (variable): er=61, sigma=1.54 S/m (blood), spherical, 5-25 mm radius
+
+| `extract_sparameters.py` | HDF5 `.out` to 16x16 S-matrix to `.s16p` |
+
+---
+
+Split: 70% train / 15% val / 15% test
+
+## Antenna Configuration
+
+| `visualise_s16p.py` | Plot S-parameters from `.s16p` |✅ HPC-ready (SLURM script configured for Rangpur)  
+
+Type: Physical half-wave wire dipole using gprMax #edge and #transmission_line
+
+### Planned (1,360 scenarios -- see DATASET_PLAN.md)
+
+    #edge: cx cy (cz-arm)  cx cy (cz+arm+gap)  pec         -- full PEC wire
+
+    #edge: cx cy cz         cx cy (cz+gap)      free_space  -- carve feed gap| `validate_s16p.py` | Validate Touchstone file structure |
+
+    #transmission_line: z cx cy cz  73  waveform            -- TL at gap
+
+| Group | Scenarios | Notes |
+
+- 16 antennas at 22.5 degree intervals, equatorial ring (z = 0.25 m)
+
+- All z-directed|---|---|---|| `generate_metadata.py` | Create ML metadata CSV |✅ Confirmed working: 90 frequency points, 0.517–2.000 GHz, R 73  
+
+- TX: 1 active transmission_line (Gaussian waveform)
+
+- RX: 15 passive transmission_line (rx_null) -- records V/I for S-parameters| Healthy | 135 | 27 anatomy configs x 5 tilt angles |
+
+- Enables full 16x16 S-parameter matrix per scenario
+
+| Hemorrhage | 1,225 | 5 sizes x 35 locations x 7 anatomy configs || `plot_setup_diagram.py` | Generate `setup_diagram.png` annotated figure |
+
+Reference: gprMax official example antenna_wire_dipole_fs.in
+
+(150 mm = 950 MHz; our 114 mm = 1,250 MHz by scaling)| Total | 1,360 | 21,760 .in files |
+
+
+
+---| `dataset_metadata.csv` | Scenario parameters and train/val/test splits |🔲 Expanded dataset (1,360 scenarios) — see `DATASET_PLAN.md`
+
+
+
+## GPU AccelerationSplit: 80% train / 10% val / 10% test -- 1,088 training scenarios
+
+
+
+gprMax supports CUDA GPU execution via the -gpu flag. On Rangpur (A100 nodes) this gives approximately 8-12x speedup per job.| `run_simulation.sh` | SLURM job script (CPU, 8 cores) |
+
+
+
+| | CPU | GPU (CUDA) |---
+
+|---|---|---|
+
+| Time per job | 45-60 min | 3-5 min || `run_simulation_gpu.sh` | SLURM job script (GPU, CUDA) — recommended |✅ **TRUE ellipsoidal head geometry** (voxelized, not spherical)  ✅ **TRUE ellipsoidal head geometry** (voxelized, NOT spherical)  
+
+| SLURM partition | cpu | a100 |
+
+| SLURM resource | --cpus-per-task=8 | --gres=gpu:1 |## Simulation Parameters
+
+| gprMax flag | (none) | -gpu |
+
+| Script | run_simulation.sh | run_simulation_gpu.sh || `brain_inputs/` | Generated `.in` input files (not committed) |
+
+| 4800 jobs at 32 parallel | ~11 hours | ~1.5 hours |
+
+| Parameter | Value | Notes |
+
+Rangpur GPU partitions:
+
+- a100-test -- development/testing, low wait time, 20 min limit, use --gres=shard:1|---|---|---|| `sparams/` | Extracted `.s16p` files and visualisation PNGs |---
+
+- a100 -- production runs, full A100 40GB GPU, use --gres=gpu:1
+
+| Domain | 600x600x600 mm | Cubic |
+
+Requires pycuda installed in the gprmax conda environment:
+
+| Grid resolution | 2 mm | lambda/10 at ~1.5 GHz || `DATASET_PLAN.md` | Full specification for the 1,360-scenario dataset |
+
+    conda activate gprmax
+
+    pip install pycuda| Time window | 60 ns | delta-f = 16.7 MHz, ~90 frequency points |
+
+
+
+Test on a100-test before submitting the full array:| Waveform | Gaussian, centre 1.25 GHz | Covers 0.5-2 GHz band || `HPC_GUIDE.md` | Complete HPC deployment instructions |✅ **CSF ventricles included** (left + right lateral ventricles, εr=80)  ✅ **CSF ventricles included** (left + right lateral ventricles, εr=80)  
+
+
+
+    srun -p a100-test --gres=shard:1 --pty bash| Antennas | 16 z-directed wire dipoles | Physical PEC arms |
+
+    python -m gprMax brain_inputs/scenario_002_tx01.in -n 1 -gpu
+
+| Dipole arm length | 56 mm (28 cells) | Resonance at 1.250 GHz in free space || `gprMax/` | gprMax FDTD solver source code |
+
+See HPC_GUIDE.md Part 2b for full GPU setup instructions.
+
+| Feed gap | 2 mm (1 cell) | Carved with free_space override |
+
+---
+
+| Total dipole length | 114 mm | z: 0.194-0.308 m |## Repository Structure
+
+## Quick Start
+
+| TL impedance | 73 ohm | Half-wave dipole impedance |
+
+### Generate and test locally
+
+| Confirmed frequency points | 90 | 0.517-2.000 GHz, scenario_001 |---
+
+    python generate_inputs.py
+
+    python generate_dataset.py
+
+    python generate_metadata.py
+
+---✅ **300-scenario dataset** (50 healthy + 250 hemorrhage)  ✅ **300-scenario dataset** (50 healthy + 250 hemorrhage)  
+
+### Run on HPC (GPU -- recommended)
+
+
+
+See HPC_GUIDE.md for full instructions. Summary:
+
+## Head Model## Dataset
+
+    git push origin main
+
+    # SSH to Rangpur, then:
+
+    git pull
+
+    rm brain_inputs/scenario_*.in && python generate_dataset.pyGeometry: Voxelized ellipsoidal layers at 2 mm resolution| File / Folder | Purpose |
+
+    pip install pycuda   # first time only
+
+    sbatch run_simulation_gpu.sh
+
+
+
+Always regenerate .in files on the HPC after any code change. The .in files are not committed to git.Semi-axes (average adult): a=9.5 cm (front-back), b=7.5 cm (left-right), c=11.5 cm (top-bottom)### Current (300 scenarios)
+
+
+
+### Extract and visualise S-parameters
+
+
+
+    python extract_sparameters.py --scenario 1Tissue layers (outside to inside):|---|---|✅ **16-antenna wire dipole array** (z-directed, 114 mm, resonant at 1.25 GHz)  ✅ **16-antenna monopole array** (circular arrangement, 37.5mm λ/4 monopoles)  
+
+    python visualise_s16p.py sparams/scenario_001.s16p
+
+
+
+---
+
+| Layer | er | sigma S/m | Thickness || Group | Scenarios | Notes |
+
+## Installation
+
+|---|---|---|---|
+
+    git clone https://github.com/paulpleela/brain-emi-simulation.git
+
+    cd brain-emi-simulation| Coupling medium (glycerol/water) | 36 | 0.3 | 5 mm ||---|---|---|| `generate_dataset.py` | Generate all scenario `.in` files |
+
+    conda env create -f gprMax/conda_env.yml
+
+    conda activate gprmax| Scalp + skull | 12 | 0.2 | 10 mm |
+
+    cd gprMax && python setup.py install && cd ..
+
+    pip install pycuda| Gray matter (cortex) | 52 | 0.97 | 3 mm || Healthy | 50 | Single anatomy, no tilt |
+
+    python -c "import gprMax; print('gprMax installed!')"
+
 | White matter (core) | 38 | 0.57 | fills interior |
+
+---
+
+| CSF ventricles | 80 | 2.0 | 2x1x4 cm ellipsoids || Hemorrhage | 250 | 5 sizes x 50 positions || `generate_inputs.py` | Generate 16 smoke-test files (`brain_tx*.in`) |✅ **S-parameter extractor** (`extract_sparameters.py`, Z₀=73 Ω, 0.5–2 GHz)  ✅ **HPC-ready** (SLURM script configured for Rangpur)
+
+## Changelog
+
+
+
+| Commit | Change |
+
+|---|---|Hemorrhage (variable): er=61, sigma=1.54 S/m (blood), spherical, 5-25 mm radius| Total | 300 | 4,800 `.in` files |
+
+| initial | Hertzian dipole (point source), no physical resonance |
+
+| 15fe072 | Physical wire dipole: correct PEC arm and free_space gap syntax |
+
+| 60b4b1b | Extractor Z0 50 to 73 ohm; F_MIN 0 to 0.5 GHz; visualiser added |
+
+| 7d66243 | Dipole arm 10 to 56 mm (resonance fix); time window 15 to 60 ns (resolution fix) |---| `extract_sparameters.py` | HDF5 `.out` → 16×16 S-matrix → `.s16p` |
+
+
+
+### Root causes of previous simulation failures
+
+
+
+1. Stale .in files on HPC -- generate_dataset.py was updated locally but old monopole-design files were still running on the HPC. Fix: delete and regenerate on HPC.## Antenna ConfigurationSplit: 70% train / 15% val / 15% test
+
+2. Arms too short (10 mm = resonance at 6.5 GHz) -- far above the 2 GHz band; S11 showed no dip. Fix: 10 mm to 56 mm arms = 114 mm total = resonance at 1.250 GHz.
+
+3. Time window too short (15 ns = 23 frequency points) -- too coarse to resolve resonance features. Fix: 15 ns to 60 ns = 90 frequency points.
+
+
+
+---Type: Physical half-wave wire dipole using gprMax #edge and #transmission_line| `visualise_s16p.py` | Plot S-parameters from `.s16p` |✅ **S-parameter visualiser** (`visualise_s16p.py`, return loss + transmission)  
+
+
+
+## References
+
+
+
+- gprMax: http://www.gprmax.com    #edge: cx cy (cz-arm)  cx cy (cz+arm+gap)  pec         -- full PEC wire### Planned (1,360 scenarios — see `DATASET_PLAN.md`)
+
+- Wire dipole example: antenna_wire_dipole_fs.in (150 mm = 950 MHz in free space)
+
+- Tissue properties: Gabriel et al. (1996) -- Dielectric properties of biological tissues    #edge: cx cy cz         cx cy (cz+gap)      free_space  -- carve feed gap
+
+- Coupling medium: Meaney et al. -- Glycerol/water mixtures for microwave brain imaging
+
+- CSF properties: Akhtari et al. (2006) -- Conductivities of brain tissues    #transmission_line: z cx cy cz  73  waveform            -- TL at gap| `validate_s16p.py` | Validate Touchstone file structure |
+
+
+
+
+- 16 antennas at 22.5 degree intervals, equatorial ring (z = 0.25 m)| Group | Scenarios | Notes |
+
+- All z-directed
+
+- TX: 1 active transmission_line (Gaussian waveform)|---|---|---|| `generate_metadata.py` | Create ML metadata CSV |✅ **HPC-ready** (SLURM script configured for Rangpur)  ---
+
+- RX: 15 passive transmission_line (rx_null) -- records V/I for S-parameters
+
+- Enables full 16x16 S-parameter matrix per scenario| Healthy | 135 | 27 anatomy configs x 5 tilt angles |
+
+
+
+Reference: gprMax official example antenna_wire_dipole_fs.in| Hemorrhage | 1,225 | 5 sizes x 35 locations x 7 anatomy configs || `plot_setup_diagram.py` | Generate `setup_diagram.png` annotated figure |
+
+(150 mm = 950 MHz; our 114 mm = 1,250 MHz by scaling)
+
+| Total | 1,360 | 21,760 `.in` files |
+
+---
+
+| `dataset_metadata.csv` | Scenario parameters and train/val/test splits |✅ **Confirmed working**: 90 frequency points, 0.517–2.000 GHz, R 73
+
+## GPU Acceleration
+
+Split: 80% train / 10% val / 10% test — 1,088 training scenarios
+
+gprMax supports CUDA GPU execution via the -gpu flag. On Rangpur (A100 nodes) this gives approximately 8-12x speedup per job.
+
+| `run_simulation.sh` | SLURM job script for HPC |
+
+| | CPU | GPU (CUDA) |
+
+|---|---|---|---
+
+| Time per job | 45-60 min | 3-5 min |
+
+| SLURM partition | cpu | a100 || `brain_inputs/` | Generated `.in` input files (not committed) |## Dataset Overview
+
+| SLURM resource | --cpus-per-task=8 | --gres=gpu:1 |
+
+| gprMax flag | (none) | -gpu |## Simulation Parameters
+
+| Script | run_simulation.sh | run_simulation_gpu.sh |
+
+| 4800 jobs at 32 parallel | ~11 hours | ~1.5 hours || `sparams/` | Extracted `.s16p` files and visualisation PNGs |
+
+
+
+Rangpur GPU partitions:| Parameter | Value | Notes |
+
+- a100-test -- development/testing, low wait time, 20 min limit, use --gres=shard:1
+
+- a100 -- production runs, full A100 40GB GPU, use --gres=gpu:1|---|---|---|| `DATASET_PLAN.md` | Full specification for the 1,360-scenario dataset |---
+
+
+
+Requires pycuda installed in the gprmax conda environment:| Domain | 600x600x600 mm | Cubic |
+
+
+
+    conda activate gprmax| Grid resolution | 2 mm | lambda/10 at ~1.5 GHz || `HPC_GUIDE.md` | Complete HPC deployment instructions |
+
+    pip install pycuda
+
+| Time window | 60 ns | delta-f = 16.7 MHz, ~90 frequency points |
+
+Test on a100-test before submitting the full array:
+
+| Waveform | Gaussian, centre 1.25 GHz | Covers 0.5–2 GHz band || `gprMax/` | gprMax FDTD solver source code |**Total**: 300 scenarios for ML training
+
+    srun -p a100-test --gres=shard:1 --pty bash
+
+    python -m gprMax brain_inputs/scenario_002_tx01.in -n 1 -gpu| Antennas | 16 z-directed wire dipoles | Physical PEC arms |
+
+
+
+See HPC_GUIDE.md Part 2b for full GPU setup instructions.| Dipole arm length | 56 mm (28 cells) | Resonance at 1.250 GHz in free space |
+
+
+
+---| Feed gap | 2 mm (1 cell) | Carved with free_space override |## Quick Start
+
+
+
+## Quick Start| Total dipole length | 114 mm | z: 0.194–0.308 m |
+
+
+
+### Generate and test locally| TL impedance | 73 ohm | Half-wave dipole impedance |
+
+
+
+    python generate_inputs.py| Confirmed frequency points | 90 | 0.517–2.000 GHz, scenario_001 |
+
+    python generate_dataset.py
+
+    python generate_metadata.py### Planned (1,360 scenarios — see `DATASET_PLAN.md`)  YZ-plane cross-section  (one dipole, side view)
+
+
+
+### Run on HPC (GPU -- recommended)---
+
+
+
+See HPC_GUIDE.md for full instructions. Summary:
+
+
+
+    git push origin main## Head Model
+
+    # SSH to Rangpur, then:
+
+    git pull| Group | Scenarios | Notes |  ────────────────────────────────────────────────### Generate Dataset
+
+    rm brain_inputs/scenario_*.in && python generate_dataset.py
+
+    pip install pycuda   # first time onlyGeometry: Voxelized ellipsoidal layers at 2 mm resolution
+
+    sbatch run_simulation_gpu.sh
+
+|---|---|---|
+
+Always regenerate .in files on the HPC after any code change. The .in files are not committed to git.
+
+Semi-axes (average adult): a = 9.5 cm (front-back), b = 7.5 cm (left-right), c = 11.5 cm (top-bottom)
+
+### Extract and visualise S-parameters
+
+| Healthy | 135 | 27 anatomy configs × 5 tilt angles |
+
+    python extract_sparameters.py --scenario 1
+
+    python visualise_s16p.py sparams/scenario_001.s16pTissue layers (outside to inside):
+
+
+
+---| Hemorrhage | 1,225 | 5 sizes × 35 locations × 7 anatomy configs |
+
+
+
+## Changelog| Layer | er | sigma (S/m) | Thickness |
+
+
+
+| Commit | Change ||---|---|---|---|| **Total** | **1,360** | 21,760 `.in` files |   z = 0.308 m ----  top of upper PEC arm```bash
+
+|---|---|
+
+| initial | Hertzian dipole (point source), no physical resonance || Coupling medium (glycerol/water) | 36 | 0.3 | 5 mm |
+
+| 15fe072 | Physical wire dipole: correct PEC arm and free_space gap syntax |
+
+| 60b4b1b | Extractor Z0 50 to 73 ohm; F_MIN 0 to 0.5 GHz; visualiser added || Scalp + skull | 12 | 0.2 | 10 mm |
+
+| 7d66243 | Dipole arm 10 to 56 mm (resonance fix); time window 15 to 60 ns (resolution fix) |
+
+| Gray matter (cortex) | 52 | 0.97 | 3 mm |
+
+### Root causes of previous simulation failures
+
+| White matter (core) | 38 | 0.57 | fills interior |Split: 80% train / 10% val / 10% test → **1,088 training scenarios**                      |  PEC wire# Generate all 300 scenarios (4800 files)
+
+1. Stale .in files on HPC -- generate_dataset.py was updated locally but old monopole-design files were still running on the HPC. Fix: delete and regenerate on HPC.
+
+| CSF ventricles | 80 | 2.0 | 2x1x4 cm ellipsoids |
+
+2. Arms too short (10 mm = resonance at 6.5 GHz) -- far above the 2 GHz band; S11 showed no dip. Fix: 10 mm to 56 mm arms = 114 mm total = resonance at 1.250 GHz.
+
+
+
+3. Time window too short (15 ns = 23 frequency points) -- too coarse to resolve resonance features. Fix: 15 ns to 60 ns = 90 frequency points.
+
+Hemorrhage (variable): er=61, sigma=1.54 S/m (blood), spherical, 5–25 mm radius
+
+---
+
+---                      |  (56 mm upper arm, 28 cells)python generate_dataset.py
+
+## References
+
+---
+
+- gprMax: http://www.gprmax.com
+
+- Wire dipole example: antenna_wire_dipole_fs.in (150 mm = 950 MHz in free space)
+
+- Tissue properties: Gabriel et al. (1996) -- Dielectric properties of biological tissues
+
+- Coupling medium: Meaney et al. -- Glycerol/water mixtures for microwave brain imaging## Antenna Configuration
+
+- CSF properties: Akhtari et al. (2006) -- Conductivities of brain tissues
+
+## Simulation Parameters   z = 0.252 m ----  top of feed gap   (cz + gap)
+
+---
+
+Type: Physical half-wave wire dipole using gprMax `#edge` and `#transmission_line`
+
+## Installation
+
+
+
+    git clone https://github.com/paulpleela/brain-emi-simulation.git
+
+    cd brain-emi-simulation```
+
+    conda env create -f gprMax/conda_env.yml
+
+    conda activate gprmax#edge: cx cy (cz-arm)  cx cy (cz+arm+gap)  pec         # full PEC wire| Parameter | Value | Notes |                   [==TL==]  <-- #transmission_line: z  73 ohm  waveform# Generate metadata CSV
+
+    cd gprMax && python setup.py install && cd ..
+
+    pip install pycuda#edge: cx cy cz         cx cy (cz+gap)      free_space  # carve feed gap
+
+    python -c "import gprMax; print('gprMax installed!')"
+
+#transmission_line: z cx cy cz  73  waveform            # TL at gap|---|---|---|
+
+```
+
+| Domain | 600×600×600 mm | Cubic |                      |      feed gap = 2 mm = 1 cellpython generate_metadata.py
+
+- 16 antennas at 22.5 degree intervals, equatorial ring (z = 0.25 m)
+
+- All z-directed| Grid resolution | 2 mm | λ/10 at ~1.5 GHz |
+
+- TX: 1 active `#transmission_line` (Gaussian waveform)
+
+- RX: 15 passive `#transmission_line` (rx_null) — records V/I for S-parameters| Time window | 60 ns | Δf = 16.7 MHz → ~90 frequency points |   z = 0.250 m ----  feed point  cz  (TL placed here)```
+
+- Enables full 16x16 S-parameter matrix per scenario
+
+| Waveform | Gaussian, centre 1.25 GHz | Covers 0.5–2 GHz band |
+
+Reference: gprMax official example `antenna_wire_dipole_fs.in`
+
+(150 mm = 950 MHz; our 114 mm = 1,250 MHz by scaling)| Antennas | 16 z-directed wire dipoles | Physical PEC arms |                      |  free_space edge overwrites PEC in gap zone
+
+
+
+---| Dipole arm length | 56 mm (28 cells) | Resonance at 1.250 GHz in free space |
+
+
+
+## GPU Acceleration| Feed gap | 2 mm (1 cell) | Carved with `free_space` override |                      |  PEC wire### Run on HPC
+
+
+
+gprMax supports CUDA GPU execution. On Rangpur this gives approximately 8–12x speedup per job.| Total dipole length | 114 mm | z: 0.194–0.308 m |
+
+
+
+| | CPU (8 cores) | GPU (CUDA) || TL impedance | 73 Ω | Half-wave dipole impedance |                      |  (56 mm lower arm, 28 cells)
+
+|---|---|---|
+
+| Time per job | 45–60 min | 3–5 min || Confirmed frequency points | 90 | 0.517–2.000 GHz, scenario_001 |
+
+| SLURM partition | `cpu` | `gpu` |
+
+| SLURM resource | `--cpus-per-task=8` | `--gres=gpu:1` |   z = 0.194 m ----  bottom of lower PEC armSee **`HPC_GUIDE.md`** for complete instructions.
+
+| gprMax flag | (none) | `-gpu` |
+
+| Script | `run_simulation.sh` | `run_simulation_gpu.sh` |---
+
+| 4800 jobs at 32 parallel | ~11 hours | ~1.5 hours |
+
+
+
+Requires `pycuda` installed in the gprmax conda environment:
+
+## Head Model
+
+```bash
+
+conda activate gprmax   Total dipole: 0.194 -> 0.308 m = 114 mm**Summary**:
+
+pip install pycuda
+
+```**Geometry**: Voxelized ellipsoidal layers at 2 mm resolution
+
+
+
+See `HPC_GUIDE.md` Part 2b for full GPU setup instructions.   ┌─────────────────────────────────────────────────────────────┐1. Push code: `git push origin main`
+
+
+
+---**Semi-axes** (average adult):
+
+
+
+## Quick Start- a = 9.5 cm (front-back)   │  #edge: cx cy 0.194  cx cy 0.308  pec          <- full wire  │2. SSH to Rangpur
+
+
+
+### Generate and test locally- b = 7.5 cm (left-right)
+
+
+
+```bash- c = 11.5 cm (top-bottom)   │  #edge: cx cy 0.250  cx cy 0.252  free_space   <- carve gap  │3. Pull code: `cd ~/brain-emi-simulation && git pull`
+
+python generate_inputs.py
+
+python generate_dataset.py
+
+python generate_metadata.py
+
+```**Tissue layers** (outside → inside):   │  #transmission_line: z cx cy 0.250  73  waveform            │4. Setup (first time): `conda env create -f gprMax/conda_env.yml`
+
+
+
+### Run on HPC (GPU — recommended)
+
+
+
+See `HPC_GUIDE.md` for full instructions. Summary:| Layer | εr | σ (S/m) | Thickness |   └─────────────────────────────────────────────────────────────┘5. Test: `python -m gprMax brain_inputs/scenario_001_tx01.in -n 8`
+
+
+
+```bash|---|---|---|---|
+
+git push origin main
+
+# SSH to Rangpur, then:| Coupling medium (glycerol/water) | 36 | 0.3 | 5 mm |6. Run all: `sbatch run_simulation.sh`
+
+git pull
+
+rm brain_inputs/scenario_*.in && python generate_dataset.py| Scalp + skull | 12 | 0.2 | 10 mm |
+
+pip install pycuda   # first time only
+
+sbatch run_simulation_gpu.sh| Gray matter (cortex) | 52 | 0.97 | 3 mm |
+
+```
+
+| White matter (core) | 38 | 0.57 | fills interior |
+
+Always regenerate `.in` files on the HPC after any code change. The `.in` files are not committed to git.
 
 | CSF ventricles | 80 | 2.0 | 2×1×4 cm ellipsoids |  Antenna ring (equatorial plane, z = 0.25 m)**Runtime**: ~19 hours (300 scenarios, 16 parallel jobs)
 
-
-
-**Hemorrhage** (variable): εr=61, σ=1.54 S/m (blood), spherical, 5–25 mm radius  ─────────────────────────────────────────────
-
-
-
-------
+### Extract and visualise S-parameters
 
 
 
-## Antenna Configuration   head_center = (0.25, 0.25)
+```bash
+
+python extract_sparameters.py --scenario 1**Hemorrhage** (variable): εr=61, σ=1.54 S/m (blood), spherical, 5–25 mm radius  ─────────────────────────────────────────────
+
+python visualise_s16p.py sparams/scenario_001.s16p
+
+```
 
 
 
-**Type**: Physical half-wave wire dipole using gprMax `#edge` + `#transmission_line`   r_ring = (a + scalp_skull) + coupling_thickness + 2*cell## Simulation Parameters
+---------
 
 
+
+## Changelog
+
+
+
+| Commit | Change |## Antenna Configuration   head_center = (0.25, 0.25)
+
+|---|---|
+
+| initial | Hertzian dipole (point source), no physical resonance |
+
+| 15fe072 | Physical wire dipole: correct PEC arm and free_space gap syntax |
+
+| 60b4b1b | Extractor Z0 50 to 73 ohm; F_MIN 0 to 0.5 GHz; visualiser added |**Type**: Physical half-wave wire dipole using gprMax `#edge` + `#transmission_line`   r_ring = (a + scalp_skull) + coupling_thickness + 2*cell## Simulation Parameters
+
+| 7d66243 | Dipole arm 10 to 56 mm (resonance fix); time window 15 to 60 ns (resolution fix) |
+
+
+
+### Root causes of previous simulation failures
 
 ```          = (0.095 + 0.010) + 0.005 + 0.004 ~ 0.114 m
 
+1. Stale `.in` files on HPC — `generate_dataset.py` was updated locally but old monopole-design files were still running on the HPC. Fix: delete and regenerate on HPC.
+
 #edge: cx cy (cz-arm)  cx cy (cz+arm+gap)  pec         <- full PEC wire
+
+2. Arms too short (10 mm = resonance at 6.5 GHz) — far above the 2 GHz band; S11 showed no dip. Fix: 10 mm to 56 mm arms = 114 mm total = resonance at 1.250 GHz.
 
 #edge: cx cy cz         cx cy (cz+gap)      free_space  <- carve feed gap| Parameter | Value | Notes |
 
+3. Time window too short (15 ns = 23 frequency points) — too coarse to resolve resonance features. Fix: 15 ns to 60 ns = 90 frequency points.
+
 #transmission_line: z cx cy cz  73  waveform            <- TL at gap
+
+---
 
 ```   Antenna i:  angle = i * 22.5 deg  (16 antennas, 360/16)|-----------|-------|-------|
 
+## References
 
 
-- 16 antennas evenly at 22.5° intervals, equatorial ring (z = 0.25 m)               cx    = 0.25 + r_ring * cos(angle)| **Domain** | 600×600×600mm | Cubic simulation space |
 
-- All z-directed — no axis-alignment ambiguity
+- gprMax: http://www.gprmax.com
+
+- Wire dipole example: `antenna_wire_dipole_fs.in` (150 mm = 950 MHz in free space)- 16 antennas evenly at 22.5° intervals, equatorial ring (z = 0.25 m)               cx    = 0.25 + r_ring * cos(angle)| **Domain** | 600×600×600mm | Cubic simulation space |
+
+- Tissue properties: Gabriel et al. (1996) — Dielectric properties of biological tissues
+
+- Coupling medium: Meaney et al. — Glycerol/water mixtures for microwave brain imaging- All z-directed — no axis-alignment ambiguity
+
+- CSF properties: Akhtari et al. (2006) — Conductivities of brain tissues
 
 - TX: 1 active `#transmission_line` (Gaussian waveform)               cy    = 0.25 + r_ring * sin(angle)| **Resolution** | 2mm | λ/10 at 2 GHz |
 
+---
+
 - RX: 15 passive `#transmission_line` (`rx_null`) — records V/I for S-parameters
+
+## Installation
 
 - Enables full 16×16 S-parameter matrix per scenario               cz    = 0.25| **Frequency** | 0-2 GHz | Optimal for brain imaging |
 
+```bash
 
+git clone https://github.com/paulpleela/brain-emi-simulation.git
 
-**Reference**: gprMax official example `antenna_wire_dipole_fs.in`  | **Time window** | 15ns | Full wave propagation |
+cd brain-emi-simulation
 
-(150 mm → 950 MHz; our 114 mm → 1,250 MHz by scaling)
+conda env create -f gprMax/conda_env.yml**Reference**: gprMax official example `antenna_wire_dipole_fs.in`  | **Time window** | 15ns | Full wave propagation |
 
-   All 16 dipoles are z-directed (vertical).| **Waveform** | Gaussian 1 GHz | Center frequency |
+conda activate gprmax
+
+cd gprMax && python setup.py install && cd ..(150 mm → 950 MHz; our 114 mm → 1,250 MHz by scaling)
+
+pip install pycuda
+
+python -c "import gprMax; print('gprMax installed!')"   All 16 dipoles are z-directed (vertical).| **Waveform** | Gaussian 1 GHz | Center frequency |
+
+```
 
 ---
 

@@ -78,6 +78,74 @@ If this works, your setup is correct! ✅
 
 ---
 
+## Part 2b: Enable GPU Acceleration (Recommended)
+
+gprMax supports CUDA GPU execution via the `-gpu` flag. On Rangpur this gives **~8–12× speedup** per job (3–5 min vs 45–60 min on CPU).
+
+### Install pycuda in the gprmax environment:
+
+```bash
+conda activate gprmax
+pip install pycuda
+```
+
+**Expected output ends with**: `Successfully installed pycuda-...`
+
+> **Note**: pycuda compiles CUDA kernels at first run. This takes ~30 seconds on first execution — normal behaviour.
+
+### Check GPU availability on Rangpur:
+
+```bash
+# See GPU partitions and nodes
+sinfo -p a100
+sinfo -p a100-test
+
+# Quick interactive test session (a100-test is low wait time, 20 min limit)
+srun -p a100-test --gres=shard:1 --pty bash
+nvidia-smi
+exit
+```
+
+> **Rangpur GPU partitions:**
+> - `a100-test` — for development/testing, short wait, 20 min time limit, use `--gres=shard:1`
+> - `a100` — for production runs, full A100 40GB GPU, use `--gres=gpu:1`
+> - `p100` — older P100 GPUs (only needed for old CUDA versions), use `--gres=gpu:1`
+
+### Test single GPU job:
+
+```bash
+# Get an interactive session on a100-test (low wait, 20 min limit)
+srun -p a100-test --gres=shard:1 --pty bash
+
+# Inside the session:
+conda activate gprmax
+cd ~/brain-emi-simulation
+python -m gprMax brain_inputs/scenario_002_tx01.in -n 1 -gpu
+exit
+```
+
+**Expected:**
+- Runtime: **3–5 minutes** (vs 45–60 min on CPU)
+- First run prints CUDA kernel compilation messages — this is normal
+- Output: `brain_inputs/scenario_001_tx01.out`
+
+If this works, you're ready to submit the GPU job array. ✅
+
+### CPU vs GPU comparison:
+
+| | CPU (8 cores) | GPU (CUDA) |
+|---|---|---|
+| Time per job | 45–60 min | 3–5 min |
+| Speedup | 1× | ~8–12× |
+| SLURM partition | `cpu` | `a100` |
+| SLURM resource | `--cpus-per-task=8` | `--gres=gpu:1` |
+| gprMax flag | *(none)* | `-gpu` |
+| Script to use | `run_simulation.sh` | `run_simulation_gpu.sh` |
+| 4800 jobs at 16 parallel | ~19 hours | ~2.5 hours |
+| 4800 jobs at 32 parallel | ~11 hours | **~1.5 hours** |
+
+---
+
 ## Part 3: Run Small Batch (10 Scenarios)
 
 ### Modify SLURM Script:
@@ -103,8 +171,11 @@ nano run_simulation.sh
 # Make sure you're in the right directory
 cd ~/brain-emi-simulation
 
-# Submit job array
-sbatch run_simulation.sh
+# Submit GPU job array (recommended)
+sbatch run_simulation_gpu.sh
+
+# Or CPU job array (fallback if no GPU nodes available)
+# sbatch run_simulation.sh
 
 # You'll see: "Submitted batch job 123456"
 ```
@@ -152,17 +223,17 @@ nano run_simulation.sh
 ### Submit Full Batch:
 
 ```bash
-# Submit all 300 scenarios (4800 jobs)
-sbatch run_simulation.sh
+# Submit all 300 scenarios (4800 jobs) using GPU (recommended)
+sbatch run_simulation_gpu.sh
 
 # Monitor progress
 watch -n 60 'echo "Running: $(squeue -u s4910027 | wc -l)"; echo "Completed: $(sacct --format=State | grep COMPLETED | wc -l)"'
 ```
 
-**Expected:**
+**Expected (GPU):**
 - 4800 jobs total
-- 16 running in parallel at any time
-- Total runtime: ~19 hours (300 hours / 16 parallel)
+- 32 running in parallel at any time
+- Total runtime: **~1.5 hours** (vs ~19 hours on CPU)
 - Output: 4800 `.out` files (~380 GB total)
 
 ---
@@ -246,6 +317,25 @@ cd ~/brain-emi-simulation
 ls brain_inputs/ | head
 ```
 
+**6. GPU not found / pycuda error:**
+```bash
+# Verify pycuda is installed
+conda activate gprmax
+python -c "import pycuda; print('pycuda OK')"
+
+# If not installed:
+pip install pycuda
+
+# Verify CUDA is available
+nvidia-smi
+
+# Test GPU manually
+python -m gprMax brain_inputs/scenario_001_tx01.in -n 1 -gpu
+
+# If GPU nodes are busy/unavailable, fall back to CPU:
+sbatch run_simulation.sh   # (uses --partition=cpu)
+```
+
 ### On Rangpur HPC:
 ```bash
 # Update code
@@ -271,12 +361,17 @@ ls brain_inputs/*.out | wc -l
 
 ## Timeline Estimate
 
+**CPU only:**
 - **Setup** (first time): 30 minutes
-- **Single test**: 45-60 minutes
-- **Small batch** (10 scenarios): 1 hour
-- **Full dataset** (300 scenarios): 19 hours
+- **Single test**: 45–60 minutes
+- **Full dataset** (300 scenarios, 16 parallel): ~19 hours
 
-**Total from scratch:** ~21 hours
+**With GPU (recommended):**
+- **Setup** (first time): 30 minutes + 5 min pycuda install
+- **Single test**: 3–5 minutes
+- **Full dataset** (300 scenarios, 32 parallel): **~1.5 hours**
+
+**Total from scratch (GPU):** ~2 hours
 
 ---
 
