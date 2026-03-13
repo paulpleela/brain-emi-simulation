@@ -47,6 +47,9 @@ echo "Start time: $(date)"
 echo "========================================"
 echo ""
 
+# Load the CUDA module so nvcc is available for PyCUDA
+module load cuda
+
 # Activate conda environment (robust method for SLURM non-interactive shells)
 source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate gprmax
