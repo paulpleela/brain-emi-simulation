@@ -48,7 +48,7 @@ echo "========================================"
 echo ""
 
 # Load the CUDA module so nvcc is available for PyCUDA
-module load cuda
+module load cuda/12.2
 
 # Activate conda environment (robust method for SLURM non-interactive shells)
 source "$HOME/miniconda3/etc/profile.d/conda.sh"
