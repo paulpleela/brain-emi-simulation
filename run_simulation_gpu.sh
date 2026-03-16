@@ -4,10 +4,11 @@
 #SBATCH --error=logs/sim_gpu_%a.err
 #SBATCH --array=1-1000%32
 #SBATCH --partition=a100
-#SBATCH --time=00:15:00
+#SBATCH --time=01:00:00
+#SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
+#SBATCH --mem=60G
 #SBATCH --gres=gpu:1
 
 # GPU-accelerated HPC job array script for gprMax brain imaging on Rangpur
