@@ -217,11 +217,11 @@ def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
                 f.write("print(f'#edge: {cx} {cy} {round(cz-arm,6)} {cx} {cy} {round(cz,6)} pec')\n")
                 # Upper limit of the gap to the tip of upper arm
                 f.write("print(f'#edge: {cx} {cy} {round(cz+gap,6)} {cx} {cy} {round(cz+arm+gap,6)} pec')\n")
-                # TL exactly spanning the gap 
+                # TL exactly spanning the gap (placed at the exact cell center to avoid PEC float rounding)
                 if ant_idx == src_idx:
-                    f.write(f"print(f'#transmission_line: z {{cx}} {{cy}} {{cz}} {dipole_tl_ohms} tx_pulse')\n")
+                    f.write(f"print(f'#transmission_line: z {{cx}} {{cy}} {{round(cz+gap/2, 6)}} {dipole_tl_ohms} tx_pulse')\n")
                 else:
-                    f.write(f"print(f'#transmission_line: z {{cx}} {{cy}} {{cz}} {dipole_tl_ohms} rx_null')\n")
+                    f.write(f"print(f'#transmission_line: z {{cx}} {{cy}} {{round(cz+gap/2, 6)}} {dipole_tl_ohms} rx_null')\n")
                 f.write("#end_python:\n\n")
 
 # ============================================================================
