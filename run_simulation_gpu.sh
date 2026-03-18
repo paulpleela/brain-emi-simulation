@@ -58,7 +58,12 @@ conda activate gprmax
 # Use the conda env Python directly as a fallback
 PYTHON="$HOME/miniconda3/envs/gprmax/bin/python"
 
+# Force Python to import the vendored gprMax in this repo first.
+# This avoids stale site-packages copies when testing local solver patches.
+export PYTHONPATH="$PWD/gprMax:${PYTHONPATH}"
+
 echo "Python executable: $PYTHON"
+echo "PYTHONPATH: $PYTHONPATH"
 $PYTHON - << 'PY'
 import gprMax
 import gprMax.gprMax as gm
