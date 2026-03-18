@@ -33,10 +33,11 @@ n_antennas = 16
 # Wire dipole dimensions (z-directed, resonant in free space ~1.25 GHz)
 # Antennas sit OUTSIDE the coupling medium in free space.
 # λ/2 in free space at 1.25 GHz = 120 mm → 0.475λ arms ≈ 57 mm each.
-# Use 56 mm (28 cells) for exact grid alignment. Total = 2×56 + 2 = 114 mm.
-# Expected resonance: 0.475 × c / 0.114 = 1.25 GHz in free space ✓
+# Use 56 mm (28 cells) for exact grid alignment.
+# Keep a 4 mm feed gap (2 cells) so the TL feedpoint can sit on-grid in free space.
+# Total length = 2×56 + 4 = 116 mm; expected resonance remains near ~1.2-1.3 GHz.
 dipole_arm_len = 0.056   # 56 mm per arm (exactly 28 cells @ 2mm grid)
-dipole_gap     = 0.002   # 2 mm feed gap (1 cell)
+dipole_gap     = 0.004   # 4 mm feed gap (2 cells) -> center feed is on-grid
 dipole_tl_ohms = 73      # Ω — half-wave dipole input impedance
 
 # ============================================================================
@@ -177,8 +178,8 @@ def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
             f.write(f"#waveform: gaussian 0 1.25e9 rx_null\n\n")
 
             # Antenna array: 16 z-directed wire dipoles
-            # Each dipole: two PEC arms along ±z (#edge), 10 mm per arm,
-            # 2 mm feed gap at equatorial plane.
+            # Each dipole: two PEC arms along ±z (#edge), 56 mm per arm,
+            # 4 mm feed gap at equatorial plane.
             # #transmission_line: z at gap, 73 Ω.
             # All z-directed — no axis-snapping.
             f.write("## Antenna array (16 z-directed wire dipoles at equatorial ring)\n")
@@ -209,7 +210,7 @@ def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
             # Per-antenna: two separate PEC arms to leave the gap untouched
             #   1. Lower arm: z-arm to z
             #   2. Upper arm: z+gap to z+arm+gap
-            #   3. Transmission line at z
+            #   3. Transmission line at z+gap/2
             for ant_idx in range(n_antennas):
                 f.write(f"## Antenna {ant_idx+1}\n#python:\n")
                 f.write(f"cx, cy, cz = antennas[{ant_idx}]\n")
