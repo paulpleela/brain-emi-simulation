@@ -58,6 +58,14 @@ conda activate gprmax
 # Use the conda env Python directly as a fallback
 PYTHON="$HOME/miniconda3/envs/gprmax/bin/python"
 
+echo "Python executable: $PYTHON"
+$PYTHON - << 'PY'
+import gprMax
+import gprMax.gprMax as gm
+print('gprMax package path:', gprMax.__file__)
+print('gprMax solver module path:', gm.__file__)
+PY
+
 # Find input file based on array task ID
 INPUT_DIR="brain_inputs"
 
