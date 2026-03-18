@@ -107,8 +107,7 @@ fi
 
 echo ""
 echo "NOTE: Automatic S-parameter extraction is disabled in GPU script."
-echo "Reason: transmission-line Vtotal/Itotal outputs are not valid in -gpu mode for this model."
-echo "Use CPU runs for scenario S-parameter extraction."
+echo "Run extract_sparameters.py manually after confirming all 16 TX outputs exist for a scenario."
 
 echo ""
 echo "End time: $(date)"
