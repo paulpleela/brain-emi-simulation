@@ -33,12 +33,11 @@ n_antennas = 16
 # Wire dipole dimensions (z-directed, resonant in free space ~1.25 GHz)
 # Antennas sit OUTSIDE the coupling medium in free space.
 # λ/2 in free space at 1.25 GHz = 120 mm → 0.475λ arms ≈ 57 mm each.
-# Use 56 mm (28 cells) for exact grid alignment.
-# Keep a 4 mm feed gap (2 cells) so the TL feedpoint can sit on-grid in free space.
-# Total length = 2×56 + 4 = 116 mm; expected resonance remains near ~1.2-1.3 GHz.
-dipole_arm_len = 0.056   # 56 mm per arm (exactly 28 cells @ 2mm grid)
-dipole_gap     = 0.004   # 4 mm feed gap (2 cells) -> center feed is on-grid
-dipole_tl_ohms = 73      # Ω — half-wave dipole input impedance
+# Use 56 mm (28 cells) for exact grid alignment. Total = 2×56 + 2 = 114 mm.
+# Expected resonance: 0.475 × c / 0.114 = 1.25 GHz in free space.
+dipole_arm_len = float(os.getenv("DIPOLE_ARM_LEN_M", "0.056"))
+dipole_gap     = float(os.getenv("DIPOLE_GAP_M", "0.002"))
+dipole_tl_ohms = float(os.getenv("DIPOLE_TL_OHMS", "73"))
 
 # ============================================================================
 # DATASET CONFIGURATION
@@ -178,8 +177,8 @@ def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
             f.write(f"#waveform: gaussian 0 1.25e9 rx_null\n\n")
 
             # Antenna array: 16 z-directed wire dipoles
-            # Each dipole: two PEC arms along ±z (#edge), 56 mm per arm,
-            # 4 mm feed gap at equatorial plane.
+            # Each dipole: PEC wire with explicit free_space feed gap.
+            # This mirrors the previously validated resonance configuration.
             # #transmission_line: z at gap, 73 Ω.
             # All z-directed — no axis-snapping.
             f.write("## Antenna array (16 z-directed wire dipoles at equatorial ring)\n")
@@ -207,22 +206,22 @@ def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
             f.write("    antennas.append((cx, cy, cz))\n")
             f.write("#end_python:\n\n")
 
-            # Per-antenna: two separate PEC arms to leave the gap untouched
-            #   1. Lower arm: z-arm to z
-            #   2. Upper arm: z+gap to z+arm+gap
-            #   3. Transmission line at z+gap/2
+            # Per-antenna: full PEC edge + free_space gap + transmission_line
+            #   1. One continuous PEC edge spanning the dipole
+            #   2. One free_space edge that carves the feed gap cell
+            #   3. Transmission line placed at the gap start coordinate
             for ant_idx in range(n_antennas):
                 f.write(f"## Antenna {ant_idx+1}\n#python:\n")
                 f.write(f"cx, cy, cz = antennas[{ant_idx}]\n")
-                # Lower limit of lower arm to the gap start
-                f.write("print(f'#edge: {cx} {cy} {round(cz-arm,6)} {cx} {cy} {round(cz,6)} pec')\n")
-                # Upper limit of the gap to the tip of upper arm
-                f.write("print(f'#edge: {cx} {cy} {round(cz+gap,6)} {cx} {cy} {round(cz+arm+gap,6)} pec')\n")
-                # TL exactly spanning the gap (placed at the exact cell center to avoid PEC float rounding)
+                # Full dipole PEC edge
+                f.write("print(f'#edge: {cx} {cy} {round(cz-arm,6)} {cx} {cy} {round(cz+arm+gap,6)} pec')\n")
+                # Carve feed gap as free-space
+                f.write("print(f'#edge: {cx} {cy} {round(cz,6)} {cx} {cy} {round(cz+gap,6)} free_space')\n")
+                # TL at the gap start
                 if ant_idx == src_idx:
-                    f.write(f"print(f'#transmission_line: z {{cx}} {{cy}} {{round(cz+gap/2, 6)}} {dipole_tl_ohms} tx_pulse')\n")
+                    f.write(f"print(f'#transmission_line: z {{cx}} {{cy}} {{cz}} {dipole_tl_ohms} tx_pulse')\n")
                 else:
-                    f.write(f"print(f'#transmission_line: z {{cx}} {{cy}} {{round(cz+gap/2, 6)}} {dipole_tl_ohms} rx_null')\n")
+                    f.write(f"print(f'#transmission_line: z {{cx}} {{cy}} {{cz}} {dipole_tl_ohms} rx_null')\n")
                 f.write("#end_python:\n\n")
 
 # ============================================================================
@@ -237,6 +236,9 @@ print(f"  Healthy: {NUM_HEALTHY} scenarios")
 print(f"  Hemorrhage: {NUM_HEMORRHAGE} scenarios ({len(LESION_SIZES)} sizes x {NUM_POSITIONS} positions)")
 print(f"  Total: {NUM_HEALTHY + NUM_HEMORRHAGE} scenarios")
 print(f"  Files: {(NUM_HEALTHY + NUM_HEMORRHAGE) * 16} input files")
+print(f"  Dipole arm length: {dipole_arm_len*1000:.1f} mm")
+print(f"  Dipole gap: {dipole_gap*1000:.1f} mm")
+print(f"  TL impedance: {dipole_tl_ohms:.1f} ohm")
 print("="*80)
 print()
 
