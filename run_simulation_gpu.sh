@@ -97,45 +97,10 @@ else
     exit 1
 fi
 
-# ── Per-scenario S-parameter extraction ──────────────────────────────────────
-# Parse scenario number directly from filename (e.g. brain_inputs/scenario_042_tx07.in → 042)
-BASENAME=$(basename "$INPUT_FILE")                         # scenario_042_tx07.in
-SCENARIO_PAD=$(echo "$BASENAME" | cut -d_ -f2)            # 042  (zero-padded)
-SCENARIO_NUM=$(echo "$SCENARIO_PAD" | sed 's/^0*//')      # 42   (plain integer)
-
 echo ""
-echo "Checking if all 16 .out files ready for scenario ${SCENARIO_PAD}..."
-
-# Check if ALL 16 .out files for this scenario now exist
-ALL_DONE=true
-MISSING_COUNT=0
-for tx in 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16; do
-    EXPECTED="${INPUT_DIR}/scenario_${SCENARIO_PAD}_tx${tx}.out"
-    if [ ! -f "$EXPECTED" ]; then
-        ALL_DONE=false
-        MISSING_COUNT=$((MISSING_COUNT + 1))
-    fi
-done
-
-if [ "$ALL_DONE" = true ]; then
-    echo "All 16 .out files present — extracting S-parameters for scenario ${SCENARIO_PAD}..."
-    mkdir -p sparams
-
-    # Lockfile prevents two near-simultaneous jobs both running extraction
-    LOCKFILE="/tmp/extract_scenario_${SCENARIO_PAD}.lock"
-    (
-        flock -n 200 || { echo "Another job already extracting scenario ${SCENARIO_PAD}, skipping."; exit 0; }
-        $PYTHON extract_sparameters.py --scenario $SCENARIO_NUM --no-delete
-        EXIT_CODE=$?
-        if [ $EXIT_CODE -ne 0 ]; then
-            echo "✗ ERROR: extract_sparameters.py failed with exit code $EXIT_CODE"
-        else
-            echo "✓ S-parameter extraction complete: sparams/scenario_${SCENARIO_PAD}.s16p"
-        fi
-    ) 200>"$LOCKFILE"
-else
-    echo "Scenario ${SCENARIO_PAD}: ${MISSING_COUNT}/16 .out files still missing — skipping extraction for now."
-fi
+echo "NOTE: Automatic S-parameter extraction is disabled in GPU script."
+echo "Reason: transmission-line Vtotal/Itotal outputs are not valid in -gpu mode for this model."
+echo "Use CPU runs for scenario S-parameter extraction."
 
 echo ""
 echo "End time: $(date)"
