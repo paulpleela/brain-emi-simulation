@@ -27,8 +27,9 @@ gray_matter_thickness = 0.003
 # before it reaches the head.  PML walls handle domain termination.
 coupling_eps_r = 36.0
 coupling_sigma = 0.3
-coupling_thickness = 0.005
+coupling_thickness = float(os.getenv("COUPLING_THICKNESS_M", "0.005"))
 n_antennas = 16
+antenna_offset_cells = float(os.getenv("ANTENNA_OFFSET_CELLS", "1.0"))
 
 # Wire dipole dimensions (z-directed, resonant in free space ~1.25 GHz)
 # Antennas sit OUTSIDE the coupling medium in free space.
@@ -191,6 +192,7 @@ def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
             f.write(f"b                  = {head_semi_axes['b']}\n")
             f.write(f"scalp_thickness    = {scalp_skull_thickness}\n")
             f.write(f"coupling_thickness = {coupling_thickness}\n")
+            f.write(f"antenna_offset_cells = {antenna_offset_cells}\n")
             f.write(f"arm                = {dipole_arm_len}\n")
             f.write(f"gap                = {dipole_gap}\n")
             f.write("antennas = []  # (cx, cy, cz)\n")
@@ -198,8 +200,8 @@ def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
             f.write("    angle = 2 * math.pi * i / n_antennas\n")
             f.write("    cos_a = math.cos(angle)\n")
             f.write("    sin_a = math.sin(angle)\n")
-            f.write("    r_x = a + scalp_thickness + coupling_thickness + cell\n")
-            f.write("    r_y = b + scalp_thickness + coupling_thickness + cell\n")
+            f.write("    r_x = a + scalp_thickness + coupling_thickness + antenna_offset_cells * cell\n")
+            f.write("    r_y = b + scalp_thickness + coupling_thickness + antenna_offset_cells * cell\n")
             f.write("    cx = round((head_center[0] + r_x * cos_a) / cell) * cell\n")
             f.write("    cy = round((head_center[1] + r_y * sin_a) / cell) * cell\n")
             f.write("    cz = head_center[2]\n")
@@ -239,6 +241,8 @@ print(f"  Files: {(NUM_HEALTHY + NUM_HEMORRHAGE) * 16} input files")
 print(f"  Dipole arm length: {dipole_arm_len*1000:.1f} mm")
 print(f"  Dipole gap: {dipole_gap*1000:.1f} mm")
 print(f"  TL impedance: {dipole_tl_ohms:.1f} ohm")
+print(f"  Coupling thickness: {coupling_thickness*1000:.1f} mm")
+print(f"  Antenna offset: {antenna_offset_cells:.2f} cell(s)")
 print("="*80)
 print()
 
