@@ -27,9 +27,9 @@ gray_matter_thickness = 0.003
 # before it reaches the head.  PML walls handle domain termination.
 coupling_eps_r = 36.0
 coupling_sigma = 0.3
-coupling_thickness = float(os.getenv("COUPLING_THICKNESS_M", "0.005"))
+coupling_thickness = 0.020
 n_antennas = 16
-antenna_offset_cells = float(os.getenv("ANTENNA_OFFSET_CELLS", "1.0"))
+antenna_offset_cells = -0.10
 
 # Wire dipole dimensions (z-directed, resonant in free space ~1.25 GHz)
 # Antennas sit OUTSIDE the coupling medium in free space.
