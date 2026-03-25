@@ -31,6 +31,7 @@ Options:
   --gpu               Use GPU mode (default)
   --cpu               Use CPU mode
   --tx-sequential     In GPU mode, disable TX-parallel and use single-GPU sequential mode
+  --tx-concurrency N  In GPU mode, max concurrent TX tasks (default: 3)
   --local             Run directly on current machine (no sbatch)
   --keep-in           Keep generated .in files (default deletes)
   --keep-out          Keep generated .out files (default deletes)
@@ -39,8 +40,7 @@ Options:
 Notes:
   - Default GPU mode: each scenario runs 16 TX jobs in parallel (one GPU per TX),
     while scenarios remain sequential.
-  - GPU mode uses rolling submission (next scenario is submitted by current
-    finalize job) to keep concurrent submitted job count low.
+  - GPU mode finalizes inline from the TX array (no extra queued CPU finalize job).
   - CPU mode or --tx-sequential uses run_simulation_core.sh.
 EOF
 }
@@ -67,6 +67,7 @@ START_SCENARIO=""
 END_SCENARIO=""
 USE_GPU=1
 GPU_TX_PARALLEL=1
+TX_CONCURRENCY=3
 RUN_LOCAL=0
 DELETE_IN=1
 DELETE_OUT=1
@@ -102,6 +103,11 @@ while [[ $# -gt 0 ]]; do
     --tx-sequential)
       GPU_TX_PARALLEL=0
       shift
+      ;;
+    --tx-concurrency)
+      [[ $# -ge 2 ]] || { echo "ERROR: --tx-concurrency requires a value"; usage; exit 1; }
+      TX_CONCURRENCY="$2"
+      shift 2
       ;;
     --local)
       RUN_LOCAL=1
@@ -154,6 +160,11 @@ if [[ "$START_SCENARIO" -gt "$END_SCENARIO" ]]; then
   exit 1
 fi
 
+if ! is_int "$TX_CONCURRENCY" || [[ "$TX_CONCURRENCY" -lt 1 ]]; then
+  echo "ERROR: --tx-concurrency must be an integer >= 1"
+  exit 1
+fi
+
 if [[ ! -f "run_simulation_core.sh" ]]; then
   echo "ERROR: run_simulation_core.sh not found. Run from repository root."
   exit 1
@@ -163,6 +174,7 @@ echo "Mode: ${MODE}"
 echo "Range: ${START_SCENARIO}..${END_SCENARIO}"
 echo "GPU: ${USE_GPU}"
 echo "GPU TX parallel: ${GPU_TX_PARALLEL}"
+echo "TX concurrency: ${TX_CONCURRENCY}"
 echo "Delete .in: ${DELETE_IN}"
 echo "Delete .out: ${DELETE_OUT}"
 
@@ -181,54 +193,61 @@ submit_gpu_parallel_pipeline() {
   local tx_cmd
   tx_cmd=$(cat <<EOF
 set -euo pipefail
+cd "${PWD}"
 source "\$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate gprmax
 TX=\$(printf "%02d" \${SLURM_ARRAY_TASK_ID})
 python -m gprMax brain_inputs/scenario_${sid_pad}_tx\${TX}.in -n 1 -gpu
+
+# Inline finalize trigger: no extra queued finalize job.
+# Any TX task that sees all 16 outputs attempts finalize under a lock.
+READY=1
+for n in \$(seq -w 1 16); do
+  [[ -f "brain_inputs/scenario_${sid_pad}_tx\${n}.out" ]] || READY=0
+done
+
+if [[ "\$READY" == "1" ]]; then
+  LOCK_FILE="/tmp/brain_emi_finalize_s${sid_pad}.lock"
+  (
+    flock -n 200 || exit 0
+
+    # Re-check under lock to avoid races.
+    READY2=1
+    for n in \$(seq -w 1 16); do
+      [[ -f "brain_inputs/scenario_${sid_pad}_tx\${n}.out" ]] || READY2=0
+    done
+    [[ "\$READY2" == "1" ]] || exit 0
+
+    python build_s16p.py --scenario ${sid} --no-delete
+    python build_time_dataset.py --scenario ${sid}
+
+    if [[ "${DELETE_IN}" == "1" ]]; then
+      rm -f brain_inputs/scenario_${sid_pad}_tx*.in
+    fi
+    if [[ "${DELETE_OUT}" == "1" ]]; then
+      rm -f brain_inputs/scenario_${sid_pad}_tx*.out
+    fi
+
+    NEXT_SCENARIO=\$(( ${sid} + 1 ))
+    if [[ "\$NEXT_SCENARIO" -le "${END_SCENARIO}" ]]; then
+      python generate_dataset.py --scenario "\$NEXT_SCENARIO"
+      bash run_scenarios.sh --range "\$NEXT_SCENARIO" "${END_SCENARIO}" --gpu --tx-concurrency ${TX_CONCURRENCY}$([[ "${DELETE_IN}" == "0" ]] && echo " --keep-in")$([[ "${DELETE_OUT}" == "0" ]] && echo " --keep-out")
+    fi
+  ) 200>"\$LOCK_FILE"
+fi
 EOF
 )
 
   local tx_job
   tx_job=$(sbatch --parsable \
     --partition=a100 --gres=gpu:1 --cpus-per-task=8 \
-    --array=1-16%16 \
+    --array=1-16%${TX_CONCURRENCY} \
     --job-name="tx_s${sid_pad}" \
     --wrap "$tx_cmd")
 
-  local finalize_cmd
-  finalize_cmd=$(cat <<EOF
-set -euo pipefail
-cd "${PWD}"
-source "\$HOME/miniconda3/etc/profile.d/conda.sh"
-conda activate gprmax
-python build_s16p.py --scenario ${sid} --no-delete
-python build_time_dataset.py --scenario ${sid}
-if [[ "${DELETE_IN}" == "1" ]]; then
-  rm -f brain_inputs/scenario_${sid_pad}_tx*.in
-fi
-if [[ "${DELETE_OUT}" == "1" ]]; then
-  rm -f brain_inputs/scenario_${sid_pad}_tx*.out
-fi
-
-NEXT_SCENARIO=\$(( ${sid} + 1 ))
-if [[ "\$NEXT_SCENARIO" -le "${END_SCENARIO}" ]]; then
-  python generate_dataset.py --scenario "\$NEXT_SCENARIO"
-  bash run_scenarios.sh --range "\$NEXT_SCENARIO" "${END_SCENARIO}" --gpu$([[ "${DELETE_IN}" == "0" ]] && echo " --keep-in")$([[ "${DELETE_OUT}" == "0" ]] && echo " --keep-out")
-fi
-EOF
-)
-
-  local final_job
-  final_job=$(sbatch --parsable \
-    --partition=cpu --cpus-per-task=1 \
-    --job-name="final_s${sid_pad}" \
-    --dependency="afterok:${tx_job}" \
-    --wrap "$finalize_cmd")
-
   echo "Submitted rolling GPU chain for scenario ${sid_pad}."
   echo "TX array job: ${tx_job}"
-  echo "Finalize job: ${final_job}"
-  echo "Next scenarios will be submitted by finalize job after TX completion."
+  echo "No separate finalize job queued; finalize/next-submit runs inline after TX completion."
 }
 
 if [[ "$RUN_LOCAL" == "1" ]]; then
