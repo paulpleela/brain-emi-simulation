@@ -1,5 +1,5 @@
 """
-Validate a .s16p file produced by extract_sparameters.py.
+Validate a .s16p file produced by build_s16p.py.
 
 Runs 8 physical sanity checks and prints a clear pass/fail summary.
 Only needs numpy — no extra dependencies beyond what gprMax already installs.
@@ -26,7 +26,7 @@ F_MAX_GHZ = 2.0
 
 def parse_s16p(filepath):
     """
-    Parse a Touchstone .s16p file written by extract_sparameters.py.
+    Parse a Touchstone .s16p file written by build_s16p.py.
 
     The writer outputs magnitude-angle pairs in GHz, 4 S-param pairs per line,
     with line-breaks inside each frequency block.  The safest approach is to

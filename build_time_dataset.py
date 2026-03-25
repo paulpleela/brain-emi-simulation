@@ -10,9 +10,9 @@ Output:
     - channels: channel names in deterministic order
 
 Usage:
-  python extract_sparams_time.py --all
-  python extract_sparams_time.py --scenario 1
-  python extract_sparams_time.py --range 1 300
+  python build_time_dataset.py --all
+  python build_time_dataset.py --scenario 1
+  python build_time_dataset.py --range 1 300
 """
 
 from __future__ import annotations

@@ -12,7 +12,7 @@
 # inside run_simulation.sh as each scenario's 16 jobs complete.
 #
 # Use this script only to re-extract or catch any scenarios that were missed:
-#   sbatch extract_sparameters.sh
+#   sbatch build_s16p.sh
 
 echo "========================================"
 echo "S-Parameter Extraction"
@@ -32,7 +32,7 @@ mkdir -p logs sparams
 SCENARIO=$SLURM_ARRAY_TASK_ID
 
 echo "Extracting scenario $SCENARIO..."
-$PYTHON extract_sparameters.py --scenario $SCENARIO
+$PYTHON build_s16p.py --scenario $SCENARIO
 
 echo ""
 echo "End time: $(date)"

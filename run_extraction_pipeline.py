@@ -1,7 +1,7 @@
 """
 Run the full extraction pipeline:
-  1) .out -> .s16p      via extract_sparameters.py
-  2) .s16p -> .npz TD   via extract_sparams_time.py
+  1) .out -> .s16p      via build_s16p.py
+  2) .s16p -> .npz TD   via build_time_dataset.py
 
 Usage examples:
   python run_extraction_pipeline.py --scenario 1
@@ -53,7 +53,7 @@ def main() -> None:
     selector = build_selector_args(args)
 
     # Stage 1: .out -> .s16p
-    cmd_stage1 = [sys.executable, "extract_sparameters.py", *selector]
+    cmd_stage1 = [sys.executable, "build_s16p.py", *selector]
     if args.keep_out:
         cmd_stage1.append("--no-delete")
     run_cmd(cmd_stage1)
@@ -61,7 +61,7 @@ def main() -> None:
     # Stage 2: .s16p -> time-domain npz
     cmd_stage2 = [
         sys.executable,
-        "extract_sparams_time.py",
+        "build_time_dataset.py",
         *selector,
         "--input-dir",
         args.input_dir,

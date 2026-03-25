@@ -34,6 +34,7 @@ build/
 /s16p_simulations/
 /brain_monopole_simulations/
 /logs/
+/sparams_time/
 
 # Large data
 *.zip

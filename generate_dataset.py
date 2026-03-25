@@ -1,144 +1,213 @@
 """
-Dataset Generator - Creates 300 scenarios with varied hemorrhage positions/sizes
+Generate gprMax scenario input files from dataset metadata.
 
-Run this to generate full ML training dataset.
-Uses the base generate_inputs.py code but loops over scenarios.
+Each metadata row (scenario) produces 16 input files:
+  brain_inputs/scenario_XXX_tx01.in ... scenario_XXX_tx16.in
+
+This script makes simulation generation metadata-driven, so the physics setup
+(lesion presence/size/position, property variation, antenna offset, coupling
+thickness) is read per scenario from dataset_metadata.csv.
 """
 
+import argparse
+import csv
 import os
-import math
 import numpy as np
 
-# Output directory
-output_dir = "brain_inputs"
-os.makedirs(output_dir, exist_ok=True)
 
-# Constants (from generate_inputs.py)
-c0 = 3e8
-f_max = 2e9
-cell = 0.002  # 2 mm grid
+OUTPUT_DIR = "brain_inputs"
+DEFAULT_METADATA = "dataset_metadata.csv"
+N_ANTENNAS = 16
+CELL = 0.002
 
-head_semi_axes = {'a': 0.095, 'b': 0.075, 'c': 0.115}
-head_center = np.array([0.25, 0.25, 0.25])
-scalp_skull_thickness = 0.010
-gray_matter_thickness = 0.003
-# Low-loss glycerol/water coupling medium: εᵣ=36, σ=0.3 S/m
-# High εᵣ matches head-tissue impedance; low σ avoids absorbing the signal
-# before it reaches the head.  PML walls handle domain termination.
-coupling_eps_r = 36.0
-coupling_sigma = 0.3
-coupling_thickness = 0.020
-n_antennas = 16
-antenna_offset_cells = -0.10
+HEAD_SEMI_AXES = {'a': 0.095, 'b': 0.075, 'c': 0.115}
+HEAD_CENTER = np.array([0.25, 0.25, 0.25])
+SCALP_SKULL_THICKNESS = 0.010
+GRAY_MATTER_THICKNESS = 0.003
 
-# Wire dipole dimensions (z-directed, resonant in free space ~1.25 GHz)
-# Antennas sit OUTSIDE the coupling medium in free space.
-# λ/2 in free space at 1.25 GHz = 120 mm → 0.475λ arms ≈ 57 mm each.
-# Use 56 mm (28 cells) for exact grid alignment. Total = 2×56 + 2 = 114 mm.
-# Expected resonance: 0.475 × c / 0.114 = 1.25 GHz in free space.
-dipole_arm_len = float(os.getenv("DIPOLE_ARM_LEN_M", "0.056"))
-dipole_gap     = float(os.getenv("DIPOLE_GAP_M", "0.002"))
-dipole_tl_ohms = float(os.getenv("DIPOLE_TL_OHMS", "73"))
+BASE_MATERIALS = {
+    "coupling": {"eps": 36.0, "sig": 0.3},
+    "scalp_skull": {"eps": 12.0, "sig": 0.2},
+    "gray": {"eps": 52.0, "sig": 0.97},
+    "white": {"eps": 38.0, "sig": 0.57},
+    "csf": {"eps": 80.0, "sig": 2.0},
+    "blood": {"eps": 61.0, "sig": 1.54},
+}
 
-# ============================================================================
-# DATASET CONFIGURATION
-# ============================================================================
+DEFAULT_COUPLING_THICKNESS = 0.020
+DEFAULT_ANTENNA_OFFSET_CELLS = -0.50
 
-NUM_HEALTHY = 50        # Healthy baselines
-NUM_HEMORRHAGE = 250    # Hemorrhage cases  
-LESION_SIZES = [0.005, 0.010, 0.015, 0.020, 0.025]  # 5, 10, 15, 20, 25mm
-NUM_POSITIONS = 50      # Positions per size
+DIPOLE_ARM_LEN = float(os.getenv("DIPOLE_ARM_LEN_M", "0.056"))
+DIPOLE_GAP = float(os.getenv("DIPOLE_GAP_M", "0.002"))
+DIPOLE_TL_OHMS = float(os.getenv("DIPOLE_TL_OHMS", "73"))
 
-def generate_positions(n):
-    """Generate systematic hemorrhage positions covering brain volume"""
-    positions = []
-    
-    # Sample within 70% of brain to stay in gray/white matter
-    max_r_xy = 0.05  # 5cm radial
-    max_z = 0.08     # 8cm vertical
-    
-    # Create 3D grid
-    n_per_dim = int(np.ceil(n ** (1/3)))
-    x_vals = np.linspace(-max_r_xy, max_r_xy, n_per_dim)
-    y_vals = np.linspace(-max_r_xy, max_r_xy, n_per_dim)
-    z_vals = np.linspace(-max_z, max_z, n_per_dim)
-    
-    for x in x_vals:
-        for y in y_vals:
-            for z in z_vals:
-                # Check if inside brain (avoid ventricles)
-                r = np.sqrt(x**2 + y**2)
-                if r < max_r_xy and abs(z) < max_z and abs(x) > 0.015:
-                    positions.append((x, y, z))
-    
-    # Sample if too many
-    if len(positions) > n:
-        idx = np.random.choice(len(positions), n, replace=False)
-        positions = [positions[i] for i in idx]
-    
-    # Add random if too few
-    while len(positions) < n:
-        r = np.random.uniform(0.015, max_r_xy)
-        theta = np.random.uniform(0, 2*np.pi)
-        x = r * np.cos(theta)
-        y = r * np.sin(theta)
-        z = np.random.uniform(-max_z, max_z)
-        if abs(x) > 0.015:  # Avoid ventricles
-            positions.append((x, y, z))
-    
-    return positions[:n]
 
-def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
-    """Generate 16 input files for one scenario"""
-    for src_idx in range(n_antennas):
+def pct_scale(value, pct):
+    return value * (1.0 + pct / 100.0)
+
+
+def parse_float(row, key, default=0.0):
+    raw = str(row.get(key, "")).strip()
+    if raw == "":
+        return float(default)
+    return float(raw)
+
+
+def parse_int(row, key, default=0):
+    raw = str(row.get(key, "")).strip()
+    if raw == "":
+        return int(default)
+    return int(raw)
+
+
+def load_metadata(path):
+    rows = []
+    with open(path, "r", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            sid = parse_int(row, "scenario_id", -1)
+            if sid <= 0:
+                continue
+            rows.append(row)
+    rows.sort(key=lambda r: int(r["scenario_id"]))
+    return rows
+
+
+def filter_rows(rows, scenario=None, range_vals=None):
+    if scenario is not None:
+        return [r for r in rows if int(r["scenario_id"]) == scenario]
+    if range_vals is not None:
+        lo, hi = range_vals
+        return [r for r in rows if lo <= int(r["scenario_id"]) <= hi]
+    return rows
+
+
+def build_materials(row):
+    eps_var_bg = parse_float(row, "epsilon_variation", 0.0)
+    sig_var_bg = parse_float(row, "sigma_variation", 0.0)
+    eps_var_anom = parse_float(row, "epsilon_anomaly_variation", 0.0)
+    sig_var_anom = parse_float(row, "sigma_anomaly_variation", 0.0)
+
+    coupling_eps = pct_scale(BASE_MATERIALS["coupling"]["eps"], eps_var_bg)
+    coupling_sig = pct_scale(BASE_MATERIALS["coupling"]["sig"], sig_var_bg)
+
+    scalp_eps = pct_scale(BASE_MATERIALS["scalp_skull"]["eps"], eps_var_bg)
+    scalp_sig = pct_scale(BASE_MATERIALS["scalp_skull"]["sig"], sig_var_bg)
+
+    gray_eps = pct_scale(BASE_MATERIALS["gray"]["eps"], eps_var_bg)
+    gray_sig = pct_scale(BASE_MATERIALS["gray"]["sig"], sig_var_bg)
+
+    white_eps = pct_scale(BASE_MATERIALS["white"]["eps"], eps_var_bg)
+    white_sig = pct_scale(BASE_MATERIALS["white"]["sig"], sig_var_bg)
+
+    csf_eps = pct_scale(BASE_MATERIALS["csf"]["eps"], eps_var_bg)
+    csf_sig = pct_scale(BASE_MATERIALS["csf"]["sig"], sig_var_bg)
+
+    blood_eps = pct_scale(BASE_MATERIALS["blood"]["eps"], eps_var_anom)
+    blood_sig = pct_scale(BASE_MATERIALS["blood"]["sig"], sig_var_anom)
+
+    return {
+        "coupling": (coupling_eps, coupling_sig),
+        "scalp": (scalp_eps, scalp_sig),
+        "gray": (gray_eps, gray_sig),
+        "white": (white_eps, white_sig),
+        "csf": (csf_eps, csf_sig),
+        "blood": (blood_eps, blood_sig),
+    }
+
+
+def write_lesion(f, row):
+    has_lesion = parse_int(row, "has_lesion", 0) == 1
+    if not has_lesion:
+        return
+
+    lesion_size_m = parse_float(row, "lesion_size_mm", 0.0) / 1000.0
+    lx = HEAD_CENTER[0] + parse_float(row, "lesion_x", 0.0)
+    ly = HEAD_CENTER[1] + parse_float(row, "lesion_y", 0.0)
+    lz = HEAD_CENTER[2] + parse_float(row, "lesion_z", 0.0)
+    shape = str(row.get("shape", "sphere")).strip().lower()
+
+    if shape == "ellipsoid":
+        ra = lesion_size_m
+        rb = lesion_size_m * 0.8
+        rc = lesion_size_m * 1.2
+        f.write("## Hemorrhage (ellipsoid)\n#python:\n")
+        f.write(f"cx, cy, cz = {lx:.6f}, {ly:.6f}, {lz:.6f}\n")
+        f.write(f"ra, rb, rc = {ra:.6f}, {rb:.6f}, {rc:.6f}\n")
+        f.write("geo_res = 0.004\n")
+        f.write("import numpy as np\n")
+        f.write("for x in np.arange(cx-ra, cx+ra, geo_res):\n")
+        f.write("    for y in np.arange(cy-rb, cy+rb, geo_res):\n")
+        f.write("        for z in np.arange(cz-rc, cz+rc, geo_res):\n")
+        f.write("            dx=((x-cx)/ra)**2\n")
+        f.write("            dy=((y-cy)/rb)**2\n")
+        f.write("            dz=((z-cz)/rc)**2\n")
+        f.write("            if dx+dy+dz <= 1.0:\n")
+        f.write("                print(f'#box: {x} {y} {z} {x+geo_res} {y+geo_res} {z+geo_res} blood')\n")
+        f.write("#end_python:\n\n")
+    else:
+        f.write(f"## Hemorrhage\n#sphere: {lx:.6f} {ly:.6f} {lz:.6f} {lesion_size_m:.6f} blood\n\n")
+
+
+def write_scenario(row, output_dir):
+    scenario_id = parse_int(row, "scenario_id")
+    has_lesion = parse_int(row, "has_lesion", 0) == 1
+    noise_level = str(row.get("noise_level", "low")).strip() or "low"
+    group_name = str(row.get("group", "unknown")).strip() or "unknown"
+
+    coupling_thickness = parse_float(row, "coupling_thickness", DEFAULT_COUPLING_THICKNESS)
+    if coupling_thickness <= 0:
+        coupling_thickness = DEFAULT_COUPLING_THICKNESS
+
+    antenna_offset_cells = parse_float(row, "antenna_offset", DEFAULT_ANTENNA_OFFSET_CELLS)
+    materials = build_materials(row)
+
+    for src_idx in range(N_ANTENNAS):
         src_num = src_idx + 1
         filename = os.path.join(output_dir, f"scenario_{scenario_id:03d}_tx{src_num:02d}.in")
-        
-        with open(filename, 'w') as f:
-            # Header
+
+        with open(filename, "w") as f:
             f.write(f"## Scenario {scenario_id:03d} - Transmit {src_num}/16\n")
+            f.write(f"## group={group_name} noise={noise_level}\n")
             if has_lesion:
-                f.write(f"## Hemorrhage: {lesion_size*1000:.0f}mm at {lesion_pos}\n")
+                f.write(
+                    "## Hemorrhage: "
+                    f"{parse_float(row, 'lesion_size_mm', 0.0):.2f}mm at "
+                    f"({parse_float(row, 'lesion_x', 0.0):.4f}, {parse_float(row, 'lesion_y', 0.0):.4f}, {parse_float(row, 'lesion_z', 0.0):.4f})\n"
+                )
             else:
-                f.write(f"## Healthy baseline\n")
+                f.write("## Healthy baseline\n")
             f.write(f"#title: scenario_{scenario_id:03d}_tx{src_num:02d}\n\n")
-            
-            # Domain and waveform
+
             f.write("#domain: 0.6 0.6 0.6\n")
             f.write("#dx_dy_dz: 0.002 0.002 0.002\n")
             f.write("#time_window: 60e-9\n\n")
-            
-            # Materials
+
             f.write("## Materials\n")
-            f.write(f"#material: {coupling_eps_r} {coupling_sigma} 1 0 coupling_medium\n")
-            f.write("#material: 12 0.2 1 0 scalp_skull\n")
-            f.write("#material: 52 0.97 1 0 gray_matter\n")
-            f.write("#material: 38 0.57 1 0 white_matter\n")
-            f.write("#material: 80 2.0 1 0 csf\n")
-            f.write("#material: 61 1.54 1 0 blood\n\n")
-            
-            # Ellipsoidal head geometry
+            f.write(f"#material: {materials['coupling'][0]:.6f} {materials['coupling'][1]:.6f} 1 0 coupling_medium\n")
+            f.write(f"#material: {materials['scalp'][0]:.6f} {materials['scalp'][1]:.6f} 1 0 scalp_skull\n")
+            f.write(f"#material: {materials['gray'][0]:.6f} {materials['gray'][1]:.6f} 1 0 gray_matter\n")
+            f.write(f"#material: {materials['white'][0]:.6f} {materials['white'][1]:.6f} 1 0 white_matter\n")
+            f.write(f"#material: {materials['csf'][0]:.6f} {materials['csf'][1]:.6f} 1 0 csf\n")
+            f.write(f"#material: {materials['blood'][0]:.6f} {materials['blood'][1]:.6f} 1 0 blood\n\n")
+
             f.write("## Ellipsoidal head geometry\n#python:\n")
             f.write("import numpy as np\n")
-            f.write(f"head_center = np.array([{head_center[0]}, {head_center[1]}, {head_center[2]}])\n")
-            f.write(f"a, b, c = {head_semi_axes['a']}, {head_semi_axes['b']}, {head_semi_axes['c']}\n")
-            f.write(f"scalp_thickness = {scalp_skull_thickness}\n")
-            f.write(f"gray_thickness = {gray_matter_thickness}\n")
+            f.write(f"head_center = np.array([{HEAD_CENTER[0]}, {HEAD_CENTER[1]}, {HEAD_CENTER[2]}])\n")
+            f.write(f"a, b, c = {HEAD_SEMI_AXES['a']}, {HEAD_SEMI_AXES['b']}, {HEAD_SEMI_AXES['c']}\n")
+            f.write(f"scalp_thickness = {SCALP_SKULL_THICKNESS}\n")
+            f.write(f"gray_thickness = {GRAY_MATTER_THICKNESS}\n")
             f.write(f"coupling_thickness = {coupling_thickness}\n")
             f.write("geo_res = 0.004\n\n")
-            
-            # Ellipsoid function and layer generation
             f.write("def in_ellipsoid(x, y, z, center, a, b, c):\n")
             f.write("    dx, dy, dz = (x-center[0])/a, (y-center[1])/b, (z-center[2])/c\n")
             f.write("    return (dx*dx + dy*dy + dz*dz) <= 1.0\n\n")
-            
             f.write("x_min = head_center[0] - (a + scalp_thickness + coupling_thickness + 0.01)\n")
             f.write("x_max = head_center[0] + (a + scalp_thickness + coupling_thickness + 0.01)\n")
             f.write("y_min = head_center[1] - (b + scalp_thickness + coupling_thickness + 0.01)\n")
             f.write("y_max = head_center[1] + (b + scalp_thickness + coupling_thickness + 0.01)\n")
             f.write("z_min = head_center[2] - (c + scalp_thickness + coupling_thickness + 0.01)\n")
             f.write("z_max = head_center[2] + (c + scalp_thickness + coupling_thickness + 0.01)\n\n")
-            
             f.write("for x in np.arange(x_min, x_max, geo_res):\n")
             f.write("    for y in np.arange(y_min, y_max, geo_res):\n")
             f.write("        for z in np.arange(z_min, z_max, geo_res):\n")
@@ -152,8 +221,7 @@ def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
             f.write("                            material = 'white_matter'\n")
             f.write("                print(f'#box: {x} {y} {z} {x+geo_res} {y+geo_res} {z+geo_res} {material}')\n")
             f.write("#end_python:\n\n")
-            
-            # CSF ventricles
+
             f.write("## CSF Ventricles\n#python:\n")
             f.write("vent_a, vent_b, vent_c = 0.020, 0.010, 0.040\n")
             f.write("vent_left = np.array([head_center[0]-0.0075, head_center[1], head_center[2]])\n")
@@ -164,38 +232,27 @@ def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
             f.write("            if in_ellipsoid(x,y,z,vent_left,vent_a,vent_b,vent_c) or in_ellipsoid(x,y,z,vent_right,vent_a,vent_b,vent_c):\n")
             f.write("                print(f'#box: {x} {y} {z} {x+geo_res} {y+geo_res} {z+geo_res} csf')\n")
             f.write("#end_python:\n\n")
-            
-            # Hemorrhage
-            if has_lesion:
-                lx = head_center[0] + lesion_pos[0]
-                ly = head_center[1] + lesion_pos[1]
-                lz = head_center[2] + lesion_pos[2]
-                f.write(f"## Hemorrhage\n#sphere: {lx} {ly} {lz} {lesion_size} blood\n\n")
-            
-            # Waveforms - Gaussian centred at 1.25 GHz for 0.5-2 GHz bandwidth
-            f.write("## Waveforms\n")
-            f.write(f"#waveform: gaussian 1 1.25e9 tx_pulse\n")
-            f.write(f"#waveform: gaussian 0 1.25e9 rx_null\n\n")
 
-            # Antenna array: 16 z-directed wire dipoles
-            # Each dipole: PEC wire with explicit free_space feed gap.
-            # This mirrors the previously validated resonance configuration.
-            # #transmission_line: z at gap, 73 Ω.
-            # All z-directed — no axis-snapping.
+            write_lesion(f, row)
+
+            f.write("## Waveforms\n")
+            f.write("#waveform: gaussian 1 1.25e9 tx_pulse\n")
+            f.write("#waveform: gaussian 0 1.25e9 rx_null\n\n")
+
             f.write("## Antenna array (16 z-directed wire dipoles at equatorial ring)\n")
             f.write("#python:\n")
             f.write("import math\n")
-            f.write(f"cell               = {0.002}\n")
-            f.write(f"n_antennas         = {n_antennas}\n")
-            f.write(f"head_center        = ({head_center[0]}, {head_center[1]}, {head_center[2]})\n")
-            f.write(f"a                  = {head_semi_axes['a']}\n")
-            f.write(f"b                  = {head_semi_axes['b']}\n")
-            f.write(f"scalp_thickness    = {scalp_skull_thickness}\n")
+            f.write(f"cell               = {CELL}\n")
+            f.write(f"n_antennas         = {N_ANTENNAS}\n")
+            f.write(f"head_center        = ({HEAD_CENTER[0]}, {HEAD_CENTER[1]}, {HEAD_CENTER[2]})\n")
+            f.write(f"a                  = {HEAD_SEMI_AXES['a']}\n")
+            f.write(f"b                  = {HEAD_SEMI_AXES['b']}\n")
+            f.write(f"scalp_thickness    = {SCALP_SKULL_THICKNESS}\n")
             f.write(f"coupling_thickness = {coupling_thickness}\n")
             f.write(f"antenna_offset_cells = {antenna_offset_cells}\n")
-            f.write(f"arm                = {dipole_arm_len}\n")
-            f.write(f"gap                = {dipole_gap}\n")
-            f.write("antennas = []  # (cx, cy, cz)\n")
+            f.write(f"arm                = {DIPOLE_ARM_LEN}\n")
+            f.write(f"gap                = {DIPOLE_GAP}\n")
+            f.write("antennas = []\n")
             f.write("for i in range(n_antennas):\n")
             f.write("    angle = 2 * math.pi * i / n_antennas\n")
             f.write("    cos_a = math.cos(angle)\n")
@@ -208,79 +265,54 @@ def write_scenario(scenario_id, has_lesion, lesion_size, lesion_pos):
             f.write("    antennas.append((cx, cy, cz))\n")
             f.write("#end_python:\n\n")
 
-            # Per-antenna: full PEC edge + free_space gap + transmission_line
-            #   1. One continuous PEC edge spanning the dipole
-            #   2. One free_space edge that carves the feed gap cell
-            #   3. Transmission line placed at the gap start coordinate
-            for ant_idx in range(n_antennas):
+            for ant_idx in range(N_ANTENNAS):
                 f.write(f"## Antenna {ant_idx+1}\n#python:\n")
                 f.write(f"cx, cy, cz = antennas[{ant_idx}]\n")
-                # Full dipole PEC edge
                 f.write("print(f'#edge: {cx} {cy} {round(cz-arm,6)} {cx} {cy} {round(cz+arm+gap,6)} pec')\n")
-                # Carve feed gap as free-space
                 f.write("print(f'#edge: {cx} {cy} {round(cz,6)} {cx} {cy} {round(cz+gap,6)} free_space')\n")
-                # TL at the gap start
                 if ant_idx == src_idx:
-                    f.write(f"print(f'#transmission_line: z {{cx}} {{cy}} {{cz}} {dipole_tl_ohms} tx_pulse')\n")
+                    f.write(f"print(f'#transmission_line: z {{cx}} {{cy}} {{cz}} {DIPOLE_TL_OHMS} tx_pulse')\n")
                 else:
-                    f.write(f"print(f'#transmission_line: z {{cx}} {{cy}} {{cz}} {dipole_tl_ohms} rx_null')\n")
+                    f.write(f"print(f'#transmission_line: z {{cx}} {{cy}} {{cz}} {DIPOLE_TL_OHMS} rx_null')\n")
                 f.write("#end_python:\n\n")
 
-# ============================================================================
-# MAIN
-# ============================================================================
 
-print("="*80)
-print("BRAIN EMI DATASET GENERATOR - 300 SCENARIOS")
-print("="*80)
-print(f"\nConfiguration:")
-print(f"  Healthy: {NUM_HEALTHY} scenarios")
-print(f"  Hemorrhage: {NUM_HEMORRHAGE} scenarios ({len(LESION_SIZES)} sizes x {NUM_POSITIONS} positions)")
-print(f"  Total: {NUM_HEALTHY + NUM_HEMORRHAGE} scenarios")
-print(f"  Files: {(NUM_HEALTHY + NUM_HEMORRHAGE) * 16} input files")
-print(f"  Dipole arm length: {dipole_arm_len*1000:.1f} mm")
-print(f"  Dipole gap: {dipole_gap*1000:.1f} mm")
-print(f"  TL impedance: {dipole_tl_ohms:.1f} ohm")
-print(f"  Coupling thickness: {coupling_thickness*1000:.1f} mm")
-print(f"  Antenna offset: {antenna_offset_cells:.2f} cell(s)")
-print("="*80)
-print()
+def main():
+    parser = argparse.ArgumentParser(description="Generate gprMax inputs from dataset metadata")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--scenario", type=int, help="Generate one scenario by ID")
+    group.add_argument("--range", type=int, nargs=2, metavar=("START", "END"), help="Generate scenarios START..END")
+    parser.add_argument("--metadata", default=DEFAULT_METADATA, help="Metadata CSV path")
+    parser.add_argument("--output-dir", default=OUTPUT_DIR, help="Output directory for .in files")
+    args = parser.parse_args()
 
-# Generate positions
-print("Generating hemorrhage positions...")
-positions = generate_positions(NUM_POSITIONS)
-print(f"  Generated {len(positions)} positions")
-print()
+    rows = load_metadata(args.metadata)
+    rows = filter_rows(rows, scenario=args.scenario, range_vals=tuple(args.range) if args.range else None)
 
-scenario_id = 1
+    if not rows:
+        print("No matching metadata rows found.")
+        return
 
-# Healthy baselines
-print(f"Generating healthy baselines (1-{NUM_HEALTHY})...")
-for i in range(NUM_HEALTHY):
-    write_scenario(scenario_id, False, 0, (0,0,0))
-    print(f"  Scenario {scenario_id:03d} - Healthy", end='\r')
-    scenario_id += 1
-print(f"  Completed {NUM_HEALTHY} healthy scenarios")
-print()
+    os.makedirs(args.output_dir, exist_ok=True)
 
-# Hemorrhage cases
-print(f"Generating hemorrhage dataset ({NUM_HEALTHY+1}-{NUM_HEALTHY+NUM_HEMORRHAGE})...")
-for size in LESION_SIZES:
-    for pos in positions:
-        if scenario_id <= NUM_HEALTHY + NUM_HEMORRHAGE:
-            write_scenario(scenario_id, True, size, pos)
-            print(f"  Scenario {scenario_id:03d} - {size*1000:.0f}mm", end='\r')
-            scenario_id += 1
-print(f"  Completed {NUM_HEMORRHAGE} hemorrhage scenarios")
-print()
+    print("=" * 80)
+    print("METADATA-DRIVEN GPRMAX INPUT GENERATOR")
+    print("=" * 80)
+    print(f"Metadata rows to generate: {len(rows)}")
+    print(f"Output directory: {args.output_dir}")
 
-print("="*80)
-print("COMPLETE!")
-print("="*80)
-print(f"\nCreated {(scenario_id-1)*16} files in {output_dir}/")
-print(f"  Scenarios 001-{NUM_HEALTHY:03d}: Healthy")
-print(f"  Scenarios {NUM_HEALTHY+1:03d}-{scenario_id-1:03d}: Hemorrhage")
-print()
-print("NEXT: Update run_simulation.sh line 5:")
-print(f"  #SBATCH --array=1-{(scenario_id-1)*16}%16")
-print("="*80)
+    for i, row in enumerate(rows, start=1):
+        sid = int(row["scenario_id"])
+        write_scenario(row, args.output_dir)
+        if i % 10 == 0 or i == len(rows):
+            print(f"  Generated scenarios: {i}/{len(rows)} (latest: {sid:03d})")
+
+    total_files = len(rows) * N_ANTENNAS
+    print("\n" + "=" * 80)
+    print("COMPLETE")
+    print("=" * 80)
+    print(f"Generated {total_files} input files for {len(rows)} scenarios.")
+
+
+if __name__ == "__main__":
+    main()
