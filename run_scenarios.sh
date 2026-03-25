@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Friendly wrapper for sequential scenario runs.
+# Friendly wrapper for scenario runs.
 # Supports: single scenario, range, or all scenarios.
 #
 # Examples:
@@ -11,7 +11,7 @@
 #   ./run_scenarios.sh --all --cpu
 #   ./run_scenarios.sh --range 1 20 --local
 #
-# Default behavior submits to SLURM via sbatch (GPU by default).
+# Default behavior submits to SLURM via sbatch (GPU + TX-parallel by default).
 
 set -euo pipefail
 
@@ -30,14 +30,16 @@ Selection (required, choose one):
 Options:
   --gpu               Use GPU mode (default)
   --cpu               Use CPU mode
+  --tx-sequential     In GPU mode, disable TX-parallel and use single-GPU sequential mode
   --local             Run directly on current machine (no sbatch)
   --keep-in           Keep generated .in files (default deletes)
   --keep-out          Keep generated .out files (default deletes)
   -h, --help          Show this help
 
 Notes:
-  - Sequential execution is performed by run_simulation_core.sh.
-  - In SLURM mode, this wrapper submits one job with START_SCENARIO/END_SCENARIO.
+  - Default GPU mode: each scenario runs 16 TX jobs in parallel (one GPU per TX),
+    while scenarios remain sequential.
+  - CPU mode or --tx-sequential uses run_simulation_core.sh.
 EOF
 }
 
@@ -62,6 +64,7 @@ MODE=""
 START_SCENARIO=""
 END_SCENARIO=""
 USE_GPU=1
+GPU_TX_PARALLEL=1
 RUN_LOCAL=0
 DELETE_IN=1
 DELETE_OUT=1
@@ -92,6 +95,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --cpu)
       USE_GPU=0
+      shift
+      ;;
+    --tx-sequential)
+      GPU_TX_PARALLEL=0
       shift
       ;;
     --local)
@@ -153,10 +160,95 @@ fi
 echo "Mode: ${MODE}"
 echo "Range: ${START_SCENARIO}..${END_SCENARIO}"
 echo "GPU: ${USE_GPU}"
+echo "GPU TX parallel: ${GPU_TX_PARALLEL}"
 echo "Delete .in: ${DELETE_IN}"
 echo "Delete .out: ${DELETE_OUT}"
 
+submit_gpu_parallel_pipeline() {
+  local prev_dep=""
+  local final_job=""
+
+  mkdir -p logs
+
+  for sid in $(seq "$START_SCENARIO" "$END_SCENARIO"); do
+    local sid_pad
+    sid_pad=$(printf "%03d" "$sid")
+
+    local prep_cmd
+    prep_cmd=$(cat <<EOF
+set -euo pipefail
+source "\$HOME/miniconda3/etc/profile.d/conda.sh"
+conda activate gprmax
+python generate_dataset.py --scenario ${sid}
+EOF
+)
+
+    local prep_job
+    if [[ -n "$prev_dep" ]]; then
+      prep_job=$(sbatch --parsable \
+        --partition=cpu --cpus-per-task=1 \
+        --job-name="prep_s${sid_pad}" \
+        --dependency="afterok:${prev_dep}" \
+        --wrap "$prep_cmd")
+    else
+      prep_job=$(sbatch --parsable \
+        --partition=cpu --cpus-per-task=1 \
+        --job-name="prep_s${sid_pad}" \
+        --wrap "$prep_cmd")
+    fi
+
+    local tx_cmd
+    tx_cmd=$(cat <<EOF
+set -euo pipefail
+source "\$HOME/miniconda3/etc/profile.d/conda.sh"
+conda activate gprmax
+TX=\$(printf "%02d" \${SLURM_ARRAY_TASK_ID})
+python -m gprMax brain_inputs/scenario_${sid_pad}_tx\${TX}.in -n 1 -gpu
+EOF
+)
+
+    local tx_job
+    tx_job=$(sbatch --parsable \
+      --partition=a100 --gres=gpu:1 --cpus-per-task=8 \
+      --array=1-16%16 \
+      --job-name="tx_s${sid_pad}" \
+      --dependency="afterok:${prep_job}" \
+      --wrap "$tx_cmd")
+
+    local finalize_cmd
+    finalize_cmd=$(cat <<EOF
+set -euo pipefail
+source "\$HOME/miniconda3/etc/profile.d/conda.sh"
+conda activate gprmax
+python build_s16p.py --scenario ${sid} --no-delete
+python build_time_dataset.py --scenario ${sid}
+if [[ "${DELETE_IN}" == "1" ]]; then
+  rm -f brain_inputs/scenario_${sid_pad}_tx*.in
+fi
+if [[ "${DELETE_OUT}" == "1" ]]; then
+  rm -f brain_inputs/scenario_${sid_pad}_tx*.out
+fi
+EOF
+)
+
+    final_job=$(sbatch --parsable \
+      --partition=cpu --cpus-per-task=1 \
+      --job-name="final_s${sid_pad}" \
+      --dependency="afterok:${tx_job}" \
+      --wrap "$finalize_cmd")
+
+    prev_dep="$final_job"
+    echo "Scenario ${sid_pad}: prep=${prep_job} tx=${tx_job} finalize=${final_job}"
+  done
+
+  echo "Submitted GPU TX-parallel sequential pipeline."
+  echo "Final job in chain: ${final_job}"
+}
+
 if [[ "$RUN_LOCAL" == "1" ]]; then
+  if [[ "$USE_GPU" == "1" && "$GPU_TX_PARALLEL" == "1" ]]; then
+    echo "NOTE: --local cannot fan out to 16 GPUs via SLURM arrays; falling back to sequential core runner."
+  fi
   echo "Launching locally..."
   START_SCENARIO="$START_SCENARIO" \
   END_SCENARIO="$END_SCENARIO" \
@@ -165,15 +257,17 @@ if [[ "$RUN_LOCAL" == "1" ]]; then
   DELETE_OUT="$DELETE_OUT" \
   bash run_simulation_core.sh
 else
-  export_vars="ALL,START_SCENARIO=${START_SCENARIO},END_SCENARIO=${END_SCENARIO},USE_GPU=${USE_GPU},DELETE_IN=${DELETE_IN},DELETE_OUT=${DELETE_OUT}"
-
-  mkdir -p logs
-
-  if [[ "$USE_GPU" == "1" ]]; then
-    echo "Submitting GPU SLURM job..."
-    sbatch --partition=a100 --gres=gpu:1 --export="$export_vars" run_simulation_core.sh
+  if [[ "$USE_GPU" == "1" && "$GPU_TX_PARALLEL" == "1" ]]; then
+    submit_gpu_parallel_pipeline
   else
-    echo "Submitting CPU SLURM job..."
-    sbatch --export="$export_vars" run_simulation_core.sh
+    export_vars="ALL,START_SCENARIO=${START_SCENARIO},END_SCENARIO=${END_SCENARIO},USE_GPU=${USE_GPU},DELETE_IN=${DELETE_IN},DELETE_OUT=${DELETE_OUT}"
+    mkdir -p logs
+    if [[ "$USE_GPU" == "1" ]]; then
+      echo "Submitting GPU sequential SLURM job (--tx-sequential)..."
+      sbatch --partition=a100 --gres=gpu:1 --export="$export_vars" run_simulation_core.sh
+    else
+      echo "Submitting CPU SLURM job..."
+      sbatch --export="$export_vars" run_simulation_core.sh
+    fi
   fi
 fi
