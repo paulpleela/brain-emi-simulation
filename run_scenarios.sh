@@ -31,7 +31,8 @@ Options:
   --gpu               Use GPU mode (default)
   --cpu               Use CPU mode
   --tx-sequential     In GPU mode, disable TX-parallel and use single-GPU sequential mode
-  --tx-concurrency N  In GPU mode, max concurrent TX tasks (default: 3)
+  --tx-concurrency N  In GPU mode, max concurrent TX tasks (optional cap)
+  --tx-cpus N         In GPU mode, CPUs per TX task (default: 2)
   --local             Run directly on current machine (no sbatch)
   --keep-in           Keep generated .in files (default deletes)
   --keep-out          Keep generated .out files (default deletes)
@@ -67,7 +68,8 @@ START_SCENARIO=""
 END_SCENARIO=""
 USE_GPU=1
 GPU_TX_PARALLEL=1
-TX_CONCURRENCY=3
+TX_CONCURRENCY=""
+TX_CPUS=2
 RUN_LOCAL=0
 DELETE_IN=1
 DELETE_OUT=1
@@ -107,6 +109,11 @@ while [[ $# -gt 0 ]]; do
     --tx-concurrency)
       [[ $# -ge 2 ]] || { echo "ERROR: --tx-concurrency requires a value"; usage; exit 1; }
       TX_CONCURRENCY="$2"
+      shift 2
+      ;;
+    --tx-cpus)
+      [[ $# -ge 2 ]] || { echo "ERROR: --tx-cpus requires a value"; usage; exit 1; }
+      TX_CPUS="$2"
       shift 2
       ;;
     --local)
@@ -161,7 +168,14 @@ if [[ "$START_SCENARIO" -gt "$END_SCENARIO" ]]; then
 fi
 
 if ! is_int "$TX_CONCURRENCY" || [[ "$TX_CONCURRENCY" -lt 1 ]]; then
-  echo "ERROR: --tx-concurrency must be an integer >= 1"
+  if [[ -n "$TX_CONCURRENCY" ]]; then
+    echo "ERROR: --tx-concurrency must be an integer >= 1"
+    exit 1
+  fi
+fi
+
+if ! is_int "$TX_CPUS" || [[ "$TX_CPUS" -lt 1 ]]; then
+  echo "ERROR: --tx-cpus must be an integer >= 1"
   exit 1
 fi
 
@@ -174,7 +188,12 @@ echo "Mode: ${MODE}"
 echo "Range: ${START_SCENARIO}..${END_SCENARIO}"
 echo "GPU: ${USE_GPU}"
 echo "GPU TX parallel: ${GPU_TX_PARALLEL}"
-echo "TX concurrency: ${TX_CONCURRENCY}"
+if [[ -n "$TX_CONCURRENCY" ]]; then
+  echo "TX concurrency cap: ${TX_CONCURRENCY}"
+else
+  echo "TX concurrency cap: scheduler-managed"
+fi
+echo "TX cpus-per-task: ${TX_CPUS}"
 echo "Delete .in: ${DELETE_IN}"
 echo "Delete .out: ${DELETE_OUT}"
 
@@ -231,17 +250,32 @@ if [[ "\$READY" == "1" ]]; then
     NEXT_SCENARIO=\$(( ${sid} + 1 ))
     if [[ "\$NEXT_SCENARIO" -le "${END_SCENARIO}" ]]; then
       python generate_dataset.py --scenario "\$NEXT_SCENARIO"
-      bash run_scenarios.sh --range "\$NEXT_SCENARIO" "${END_SCENARIO}" --gpu --tx-concurrency ${TX_CONCURRENCY}$([[ "${DELETE_IN}" == "0" ]] && echo " --keep-in")$([[ "${DELETE_OUT}" == "0" ]] && echo " --keep-out")
+      NEXT_ARGS="--range \"\$NEXT_SCENARIO\" \"${END_SCENARIO}\" --gpu --tx-cpus ${TX_CPUS}"
+      if [[ -n "${TX_CONCURRENCY}" ]]; then
+        NEXT_ARGS="\$NEXT_ARGS --tx-concurrency ${TX_CONCURRENCY}"
+      fi
+      if [[ "${DELETE_IN}" == "0" ]]; then
+        NEXT_ARGS="\$NEXT_ARGS --keep-in"
+      fi
+      if [[ "${DELETE_OUT}" == "0" ]]; then
+        NEXT_ARGS="\$NEXT_ARGS --keep-out"
+      fi
+      eval "bash run_scenarios.sh \$NEXT_ARGS"
     fi
   ) 200>"\$LOCK_FILE"
 fi
 EOF
 )
 
+  local array_spec="1-16"
+  if [[ -n "${TX_CONCURRENCY}" ]]; then
+    array_spec="1-16%${TX_CONCURRENCY}"
+  fi
+
   local tx_job
   tx_job=$(sbatch --parsable \
-    --partition=a100 --gres=gpu:1 --cpus-per-task=8 \
-    --array=1-16%${TX_CONCURRENCY} \
+    --partition=a100 --gres=gpu:1 --cpus-per-task=${TX_CPUS} \
+    --array=${array_spec} \
     --job-name="tx_s${sid_pad}" \
     --wrap "$tx_cmd")
 
