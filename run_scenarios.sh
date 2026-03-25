@@ -39,6 +39,8 @@ Options:
 Notes:
   - Default GPU mode: each scenario runs 16 TX jobs in parallel (one GPU per TX),
     while scenarios remain sequential.
+  - GPU mode uses rolling submission (next scenario is submitted by current
+    finalize job) to keep concurrent submitted job count low.
   - CPU mode or --tx-sequential uses run_simulation_core.sh.
 EOF
 }
@@ -165,40 +167,19 @@ echo "Delete .in: ${DELETE_IN}"
 echo "Delete .out: ${DELETE_OUT}"
 
 submit_gpu_parallel_pipeline() {
-  local prev_dep=""
-  local final_job=""
+  local sid="$START_SCENARIO"
+  local sid_pad
+  sid_pad=$(printf "%03d" "$sid")
 
   mkdir -p logs
 
-  for sid in $(seq "$START_SCENARIO" "$END_SCENARIO"); do
-    local sid_pad
-    sid_pad=$(printf "%03d" "$sid")
+  # Generate the first scenario inputs immediately (no queued prep job).
+  source "$HOME/miniconda3/etc/profile.d/conda.sh"
+  conda activate gprmax
+  python generate_dataset.py --scenario "$sid"
 
-    local prep_cmd
-    prep_cmd=$(cat <<EOF
-set -euo pipefail
-source "\$HOME/miniconda3/etc/profile.d/conda.sh"
-conda activate gprmax
-python generate_dataset.py --scenario ${sid}
-EOF
-)
-
-    local prep_job
-    if [[ -n "$prev_dep" ]]; then
-      prep_job=$(sbatch --parsable \
-        --partition=cpu --cpus-per-task=1 \
-        --job-name="prep_s${sid_pad}" \
-        --dependency="afterok:${prev_dep}" \
-        --wrap "$prep_cmd")
-    else
-      prep_job=$(sbatch --parsable \
-        --partition=cpu --cpus-per-task=1 \
-        --job-name="prep_s${sid_pad}" \
-        --wrap "$prep_cmd")
-    fi
-
-    local tx_cmd
-    tx_cmd=$(cat <<EOF
+  local tx_cmd
+  tx_cmd=$(cat <<EOF
 set -euo pipefail
 source "\$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate gprmax
@@ -207,17 +188,17 @@ python -m gprMax brain_inputs/scenario_${sid_pad}_tx\${TX}.in -n 1 -gpu
 EOF
 )
 
-    local tx_job
-    tx_job=$(sbatch --parsable \
-      --partition=a100 --gres=gpu:1 --cpus-per-task=8 \
-      --array=1-16%16 \
-      --job-name="tx_s${sid_pad}" \
-      --dependency="afterok:${prep_job}" \
-      --wrap "$tx_cmd")
+  local tx_job
+  tx_job=$(sbatch --parsable \
+    --partition=a100 --gres=gpu:1 --cpus-per-task=8 \
+    --array=1-16%16 \
+    --job-name="tx_s${sid_pad}" \
+    --wrap "$tx_cmd")
 
-    local finalize_cmd
-    finalize_cmd=$(cat <<EOF
+  local finalize_cmd
+  finalize_cmd=$(cat <<EOF
 set -euo pipefail
+cd "${PWD}"
 source "\$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate gprmax
 python build_s16p.py --scenario ${sid} --no-delete
@@ -228,21 +209,26 @@ fi
 if [[ "${DELETE_OUT}" == "1" ]]; then
   rm -f brain_inputs/scenario_${sid_pad}_tx*.out
 fi
+
+NEXT_SCENARIO=\$(( ${sid} + 1 ))
+if [[ "\$NEXT_SCENARIO" -le "${END_SCENARIO}" ]]; then
+  python generate_dataset.py --scenario "\$NEXT_SCENARIO"
+  bash run_scenarios.sh --range "\$NEXT_SCENARIO" "${END_SCENARIO}" --gpu$([[ "${DELETE_IN}" == "0" ]] && echo " --keep-in")$([[ "${DELETE_OUT}" == "0" ]] && echo " --keep-out")
+fi
 EOF
 )
 
-    final_job=$(sbatch --parsable \
-      --partition=cpu --cpus-per-task=1 \
-      --job-name="final_s${sid_pad}" \
-      --dependency="afterok:${tx_job}" \
-      --wrap "$finalize_cmd")
+  local final_job
+  final_job=$(sbatch --parsable \
+    --partition=cpu --cpus-per-task=1 \
+    --job-name="final_s${sid_pad}" \
+    --dependency="afterok:${tx_job}" \
+    --wrap "$finalize_cmd")
 
-    prev_dep="$final_job"
-    echo "Scenario ${sid_pad}: prep=${prep_job} tx=${tx_job} finalize=${final_job}"
-  done
-
-  echo "Submitted GPU TX-parallel sequential pipeline."
-  echo "Final job in chain: ${final_job}"
+  echo "Submitted rolling GPU chain for scenario ${sid_pad}."
+  echo "TX array job: ${tx_job}"
+  echo "Finalize job: ${final_job}"
+  echo "Next scenarios will be submitted by finalize job after TX completion."
 }
 
 if [[ "$RUN_LOCAL" == "1" ]]; then
