@@ -226,9 +226,11 @@ for n in \$(seq -w 1 16); do
 done
 
 if [[ "\$READY" == "1" ]]; then
-  LOCK_FILE="/tmp/brain_emi_finalize_s${sid_pad}.lock"
-  (
-    flock -n 200 || exit 0
+  LOCK_DIR="/tmp/brain_emi_finalize_s${sid_pad}.lockdir"
+
+  # Atomic directory creation acts as a lock (portable, no flock dependency).
+  if mkdir "\$LOCK_DIR" 2>/dev/null; then
+    trap 'rm -rf "\$LOCK_DIR"' EXIT
 
     # Re-check under lock to avoid races.
     READY2=1
@@ -236,6 +238,8 @@ if [[ "\$READY" == "1" ]]; then
       [[ -f "brain_inputs/scenario_${sid_pad}_tx\${n}.out" ]] || READY2=0
     done
     [[ "\$READY2" == "1" ]] || exit 0
+
+    echo "[scenario ${sid_pad}] All TX outputs present, running finalize steps..."
 
     python build_s16p.py --scenario ${sid} --no-delete
     python build_time_dataset.py --scenario ${sid}
@@ -262,7 +266,7 @@ if [[ "\$READY" == "1" ]]; then
       fi
       eval "bash run_scenarios.sh \$NEXT_ARGS"
     fi
-  ) 200>"\$LOCK_FILE"
+  fi
 fi
 EOF
 )
