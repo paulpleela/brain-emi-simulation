@@ -41,7 +41,7 @@ Options:
 Notes:
   - Default GPU mode: each scenario runs 16 TX jobs in parallel (one GPU per TX),
     while scenarios remain sequential.
-  - GPU mode finalizes inline from the TX array (no extra queued CPU finalize job).
+  - GPU mode uses a queued CPU finalize job dependent on TX completion.
   - CPU mode or --tx-sequential uses run_simulation_core.sh.
 EOF
 }
@@ -217,57 +217,6 @@ source "\$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate gprmax
 TX=\$(printf "%02d" \${SLURM_ARRAY_TASK_ID})
 python -m gprMax brain_inputs/scenario_${sid_pad}_tx\${TX}.in -n 1 -gpu
-
-# Inline finalize trigger: no extra queued finalize job.
-# Any TX task that sees all 16 outputs attempts finalize under a lock.
-READY=1
-for n in \$(seq -w 1 16); do
-  [[ -f "brain_inputs/scenario_${sid_pad}_tx\${n}.out" ]] || READY=0
-done
-
-if [[ "\$READY" == "1" ]]; then
-  LOCK_DIR="/tmp/brain_emi_finalize_s${sid_pad}.lockdir"
-
-  # Atomic directory creation acts as a lock (portable, no flock dependency).
-  if mkdir "\$LOCK_DIR" 2>/dev/null; then
-    trap 'rm -rf "\$LOCK_DIR"' EXIT
-
-    # Re-check under lock to avoid races.
-    READY2=1
-    for n in \$(seq -w 1 16); do
-      [[ -f "brain_inputs/scenario_${sid_pad}_tx\${n}.out" ]] || READY2=0
-    done
-    [[ "\$READY2" == "1" ]] || exit 0
-
-    echo "[scenario ${sid_pad}] All TX outputs present, running finalize steps..."
-
-    python build_s16p.py --scenario ${sid} --no-delete
-    python build_time_dataset.py --scenario ${sid}
-
-    if [[ "${DELETE_IN}" == "1" ]]; then
-      rm -f brain_inputs/scenario_${sid_pad}_tx*.in
-    fi
-    if [[ "${DELETE_OUT}" == "1" ]]; then
-      rm -f brain_inputs/scenario_${sid_pad}_tx*.out
-    fi
-
-    NEXT_SCENARIO=\$(( ${sid} + 1 ))
-    if [[ "\$NEXT_SCENARIO" -le "${END_SCENARIO}" ]]; then
-      python generate_dataset.py --scenario "\$NEXT_SCENARIO"
-      NEXT_ARGS="--range \"\$NEXT_SCENARIO\" \"${END_SCENARIO}\" --gpu --tx-cpus ${TX_CPUS}"
-      if [[ -n "${TX_CONCURRENCY}" ]]; then
-        NEXT_ARGS="\$NEXT_ARGS --tx-concurrency ${TX_CONCURRENCY}"
-      fi
-      if [[ "${DELETE_IN}" == "0" ]]; then
-        NEXT_ARGS="\$NEXT_ARGS --keep-in"
-      fi
-      if [[ "${DELETE_OUT}" == "0" ]]; then
-        NEXT_ARGS="\$NEXT_ARGS --keep-out"
-      fi
-      eval "bash run_scenarios.sh \$NEXT_ARGS"
-    fi
-  fi
-fi
 EOF
 )
 
@@ -283,9 +232,60 @@ EOF
     --job-name="tx_s${sid_pad}" \
     --wrap "$tx_cmd")
 
+  local finalize_cmd
+  finalize_cmd=$(cat <<EOF
+set -euo pipefail
+cd "${PWD}"
+source "\$HOME/miniconda3/etc/profile.d/conda.sh"
+conda activate gprmax
+
+python build_s16p.py --scenario ${sid} --no-delete
+if [[ ! -f "sparams/scenario_${sid_pad}.s16p" ]]; then
+  echo "ERROR: missing sparams/scenario_${sid_pad}.s16p after build_s16p"
+  exit 1
+fi
+
+python build_time_dataset.py --scenario ${sid}
+if [[ ! -f "sparams_time/scenario_${sid_pad}_td.npz" ]]; then
+  echo "ERROR: missing sparams_time/scenario_${sid_pad}_td.npz after build_time_dataset"
+  exit 1
+fi
+
+if [[ "${DELETE_IN}" == "1" ]]; then
+  rm -f brain_inputs/scenario_${sid_pad}_tx*.in
+fi
+if [[ "${DELETE_OUT}" == "1" ]]; then
+  rm -f brain_inputs/scenario_${sid_pad}_tx*.out
+fi
+
+NEXT_SCENARIO=\$(( ${sid} + 1 ))
+if [[ "\$NEXT_SCENARIO" -le "${END_SCENARIO}" ]]; then
+  NEXT_ARGS="--range \"\$NEXT_SCENARIO\" \"${END_SCENARIO}\" --gpu --tx-cpus ${TX_CPUS}"
+  if [[ -n "${TX_CONCURRENCY}" ]]; then
+    NEXT_ARGS="\$NEXT_ARGS --tx-concurrency ${TX_CONCURRENCY}"
+  fi
+  if [[ "${DELETE_IN}" == "0" ]]; then
+    NEXT_ARGS="\$NEXT_ARGS --keep-in"
+  fi
+  if [[ "${DELETE_OUT}" == "0" ]]; then
+    NEXT_ARGS="\$NEXT_ARGS --keep-out"
+  fi
+  eval "bash run_scenarios.sh \$NEXT_ARGS"
+fi
+EOF
+)
+
+  local final_job
+  final_job=$(sbatch --parsable \
+    --partition=cpu --cpus-per-task=1 \
+    --job-name="final_s${sid_pad}" \
+    --dependency="afterok:${tx_job}" \
+    --wrap "$finalize_cmd")
+
   echo "Submitted rolling GPU chain for scenario ${sid_pad}."
   echo "TX array job: ${tx_job}"
-  echo "No separate finalize job queued; finalize/next-submit runs inline after TX completion."
+  echo "Finalize job: ${final_job}"
+  echo "Next scenario is submitted by finalize job after successful extraction."
 }
 
 if [[ "$RUN_LOCAL" == "1" ]]; then
