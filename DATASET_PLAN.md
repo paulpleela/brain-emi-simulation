@@ -12,7 +12,8 @@ This document reflects the active dataset design implemented by:
 - Ports per scenario: 16 TX files (`tx01`..`tx16`)
 - Output targets:
   - Frequency domain: `sparams/scenario_XXX.s16p`
-  - Time domain ML tensor: `sparams_time/scenario_XXX_td.npz`
+  - Frequency-domain ML tensor: `fd_tensors/scenario_XXX_fd.npz`
+  - Global normalization stats: `fd_tensors/normalization_freq_full.npz`
 
 ## Split Policy
 

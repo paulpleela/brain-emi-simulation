@@ -10,9 +10,10 @@
 # Low-storage sequential pipeline:
 #   1) Generate ONE scenario's 16 input files from metadata
 #   2) Run all 16 TX simulations for that scenario
-#   3) Extract .s16p and time-domain .npz
+#   3) Extract .s16p
 #   4) Delete that scenario's .in/.out files
 #   5) Move to next scenario
+#   6) After range completes, build frequency-domain full-S tensors once
 #
 # Default mode processes scenario 1 only.
 #
@@ -64,7 +65,7 @@ if [[ "$USE_GPU" == "1" ]]; then
   module load cuda/12.2 || true
 fi
 
-mkdir -p brain_inputs sparams sparams_time logs
+mkdir -p brain_inputs sparams fd_tensors logs
 
 for sid in $(seq "$START_SCENARIO" "$END_SCENARIO"); do
   sid_pad=$(printf "%03d" "$sid")
@@ -91,9 +92,8 @@ for sid in $(seq "$START_SCENARIO" "$END_SCENARIO"); do
     fi
   done
 
-  # 3) Extract S-parameters and time-domain features
+  # 3) Extract S-parameters
   "$PYTHON" build_s16p.py --scenario "$sid" --no-delete
-  "$PYTHON" build_time_dataset.py --scenario "$sid"
 
   # 4) Delete intermediate files for this scenario
   if [[ "$DELETE_IN" == "1" ]]; then
@@ -107,9 +107,14 @@ for sid in $(seq "$START_SCENARIO" "$END_SCENARIO"); do
   echo "Scenario ${sid_pad} complete"
 done
 
+# Build train-fit normalized frequency-domain tensors for the processed range.
+"$PYTHON" build_time_dataset.py --range "$START_SCENARIO" "$END_SCENARIO" --fit-stats
+
 echo ""
 echo "========================================"
 echo "All scenarios complete"
 echo "End time: $(date)"
-echo "Outputs: sparams/ and sparams_time/"
+echo "Outputs: sparams/scenario_XXX.s16p"
+echo "         fd_tensors/scenario_XXX_fd.npz"
+echo "         fd_tensors/normalization_freq_full.npz"
 echo "========================================"

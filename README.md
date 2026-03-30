@@ -7,7 +7,7 @@ This repository supports a full workflow:
 2. Generate gprMax input files from metadata.
 3. Run low-storage sequential simulations on HPC.
 4. Extract Touchstone S-parameters.
-5. Convert S-parameters to time-domain tensors for deep learning.
+5. Convert S-parameters to frequency-domain full-S tensors for deep learning.
 
 ## Current Workflow
 
@@ -136,7 +136,7 @@ Toggles:
 - keep `.out` files: add `DELETE_OUT=0`
 - keep `.in` files: add `DELETE_IN=0`
 
-## S-Parameter and Time-Domain Extraction
+## S-Parameter and Frequency-Domain Extraction
 
 ### From `.out` to `.s16p`
 
@@ -148,48 +148,25 @@ conda run -n brain-emi-simulation python build_s16p.py --all
 
 Output folder: [sparams](sparams)
 
-### From `.s16p` to training tensors (time or frequency domain)
+### From `.s16p` to training tensors (frequency full-S only)
 
 ```bash
 conda run -n brain-emi-simulation python build_time_dataset.py --scenario 1
 conda run -n brain-emi-simulation python build_time_dataset.py --range 1 100
 conda run -n brain-emi-simulation python build_time_dataset.py --all
 
-# Full matrix, frequency-domain features for localisation
-conda run -n brain-emi-simulation python build_time_dataset.py --all --domain freq --matrix full --norm dataset-2d
-
-# Same as above, explicitly fitting dataset-2d stats on TRAIN split only
-conda run -n brain-emi-simulation python build_time_dataset.py --all --domain freq --matrix full --norm dataset-2d --norm-fit-split train --split-mode stratified
+# Fit train-only normalization stats and generate tensors for all selected scenarios
+conda run -n brain-emi-simulation python build_time_dataset.py --all --fit-stats
 ```
 
-Output folder: [sparams_time](sparams_time)
-Output filename suffix:
-- time domain: `*_td.npz`
-- frequency domain: `*_fd.npz`
+Output folder: [fd_tensors](fd_tensors)
 
-ML tensor format (configurable):
+ML tensor format (fixed):
 - NPZ keys: `signal`, `channels`
-- `--matrix diag` -> `Sii` only (`S11..S1616`, real/imag pairs)
-- `--matrix full` -> full `Sij` (`S11..S1616`, real/imag pairs)
-- `--domain time` -> IFFT over frequency axis
-- `--domain freq` -> raw frequency-domain complex channels split to real/imag
-- `--norm` options:
-  - `maxabs`: per-sample max-abs scaling (legacy default)
-  - `sample-2d`: per-sample 2D z-score over entire tensor
-  - `dataset-2d`: dataset-level per-cell z-score (channel x frequency/time), fit on selected split (default: train)
-  - `none`: disable normalization
-- Split control options:
-  - `--split-mode stratified` (default): label-aware split assignment
-  - `--split-mode legacy-id`: old fixed ID ranges
-  - `--stratify-cols`: choose label columns used for balancing (default: `condition_label,size_bucket,region,shape,noise_level`)
-  - `--train-ratio`, `--val-ratio`, `--split-seed`
-- Metadata labels are enriched automatically:
-  - `condition_label`: `hemorrhage` or `no_hemorrhage` (from `has_lesion`)
-  - `label_stratify_key`: combined key from the selected stratify columns
-
-Examples for 16-port setup:
-- `diag + time/freq`: `signal` shape `(32, F_or_T)`
-- `full + time/freq`: `signal` shape `(512, F_or_T)`
+- Full S-matrix channels only (`S11..S1616`, real/imag pairs)
+- `signal` shape: `(512, F)` for 16-port setup
+- Normalization: train-split fit only, reused for train/val/test
+- Global stats file: `fd_tensors/normalization_freq_full.npz`
 
 ### End-to-end wrapper
 
@@ -217,7 +194,7 @@ conda run -n brain-emi-simulation python visualise_s16p.py sparams/scenario_001.
 - [run_simulation_gpu.sh](run_simulation_gpu.sh): default GPU SLURM sequential pipeline
 - [run_simulation_core.sh](run_simulation_core.sh): shared sequential engine
 - [build_s16p.py](build_s16p.py): `.out -> .s16p`
-- [build_time_dataset.py](build_time_dataset.py): `.s16p -> configurable freq/time tensors with split-safe normalization`
+- [build_time_dataset.py](build_time_dataset.py): `.s16p -> frequency-domain full-S tensors with train-fit normalization`
 - [run_extraction_pipeline.py](run_extraction_pipeline.py): combined extraction wrapper
 - [visualise_s16p.py](visualise_s16p.py): S-parameter plotting
 

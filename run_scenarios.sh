@@ -36,6 +36,7 @@ Options:
   --local             Run directly on current machine (no sbatch)
   --keep-in           Keep generated .in files (default deletes)
   --keep-out          Keep generated .out files (default deletes)
+  --keep-slurm-logs   Keep per-scenario SLURM tx/finalize logs (default deletes on success)
   -h, --help          Show this help
 
 Notes:
@@ -73,6 +74,7 @@ TX_CPUS=2
 RUN_LOCAL=0
 DELETE_IN=1
 DELETE_OUT=1
+DELETE_SLURM_LOGS=1
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -126,6 +128,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --keep-out)
       DELETE_OUT=0
+      shift
+      ;;
+    --keep-slurm-logs)
+      DELETE_SLURM_LOGS=0
       shift
       ;;
     -h|--help)
@@ -196,6 +202,9 @@ fi
 echo "TX cpus-per-task: ${TX_CPUS}"
 echo "Delete .in: ${DELETE_IN}"
 echo "Delete .out: ${DELETE_OUT}"
+echo "Delete SLURM tx/finalize logs on success: ${DELETE_SLURM_LOGS}"
+
+FIRST_SCENARIO="${FIRST_SCENARIO:-$START_SCENARIO}"
 
 submit_gpu_parallel_pipeline() {
   local sid="$START_SCENARIO"
@@ -230,6 +239,8 @@ EOF
     --partition=a100 --gres=gpu:1 --cpus-per-task=${TX_CPUS} \
     --array=${array_spec} \
     --job-name="tx_s${sid_pad}" \
+    --output="logs/tx_s${sid_pad}_%A_%a.out" \
+    --error="logs/tx_s${sid_pad}_%A_%a.err" \
     --wrap "$tx_cmd")
 
   local finalize_cmd
@@ -256,17 +267,16 @@ if [[ ! -f "sparams/scenario_${sid_pad}.s16p" ]]; then
   exit 1
 fi
 
-python build_time_dataset.py --scenario ${sid}
-if [[ ! -f "sparams_time/scenario_${sid_pad}_td.npz" ]]; then
-  echo "ERROR: missing sparams_time/scenario_${sid_pad}_td.npz after build_time_dataset"
-  exit 1
-fi
-
 if [[ "${DELETE_IN}" == "1" ]]; then
   rm -f brain_inputs/scenario_${sid_pad}_tx*.in
 fi
 if [[ "${DELETE_OUT}" == "1" ]]; then
   rm -f brain_inputs/scenario_${sid_pad}_tx*.out
+fi
+
+if [[ "${DELETE_SLURM_LOGS}" == "1" ]]; then
+  rm -f logs/tx_s${sid_pad}_${tx_job}_*.out logs/tx_s${sid_pad}_${tx_job}_*.err
+  rm -f "logs/final_s${sid_pad}_\${SLURM_JOB_ID}.out" "logs/final_s${sid_pad}_\${SLURM_JOB_ID}.err"
 fi
 
 NEXT_SCENARIO=\$(( ${sid} + 1 ))
@@ -281,7 +291,20 @@ if [[ "\$NEXT_SCENARIO" -le "${END_SCENARIO}" ]]; then
   if [[ "${DELETE_OUT}" == "0" ]]; then
     NEXT_ARGS="\$NEXT_ARGS --keep-out"
   fi
-  eval "bash run_scenarios.sh \$NEXT_ARGS"
+  if [[ "${DELETE_SLURM_LOGS}" == "0" ]]; then
+    NEXT_ARGS="\$NEXT_ARGS --keep-slurm-logs"
+  fi
+  eval "FIRST_SCENARIO=${FIRST_SCENARIO} bash run_scenarios.sh \$NEXT_ARGS"
+else
+  python build_time_dataset.py --range ${FIRST_SCENARIO} ${END_SCENARIO} --fit-stats
+  if [[ ! -f "fd_tensors/scenario_${sid_pad}_fd.npz" ]]; then
+    echo "ERROR: missing fd_tensors/scenario_${sid_pad}_fd.npz after build_time_dataset"
+    exit 1
+  fi
+  if [[ ! -f "fd_tensors/normalization_freq_full.npz" ]]; then
+    echo "ERROR: missing fd_tensors/normalization_freq_full.npz after build_time_dataset"
+    exit 1
+  fi
 fi
 EOF
 )
@@ -290,6 +313,8 @@ EOF
   final_job=$(sbatch --parsable \
     --partition=cpu --cpus-per-task=1 \
     --job-name="final_s${sid_pad}" \
+    --output="logs/final_s${sid_pad}_%j.out" \
+    --error="logs/final_s${sid_pad}_%j.err" \
     --dependency="afterany:${tx_job}" \
     --wrap "$finalize_cmd")
 
