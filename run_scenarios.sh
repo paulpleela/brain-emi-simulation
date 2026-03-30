@@ -239,6 +239,17 @@ cd "${PWD}"
 source "\$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate gprmax
 
+TX_JOB_ID="${tx_job}"
+TX_STATE=\$(sacct -n -X -j "\$TX_JOB_ID" --format=State 2>/dev/null | head -n 1 | awk '{print \$1}')
+if [[ -z "\$TX_STATE" ]]; then
+  TX_STATE=\$(scontrol show job "\$TX_JOB_ID" 2>/dev/null | awk -F= '/JobState=/{print \$2; exit}' | awk '{print \$1}')
+fi
+if [[ "\$TX_STATE" != "COMPLETED" ]]; then
+  echo "ERROR: TX array job \$TX_JOB_ID finished with state '\$TX_STATE' (expected COMPLETED)."
+  echo "       Check TX logs before rerunning."
+  exit 1
+fi
+
 python build_s16p.py --scenario ${sid} --no-delete
 if [[ ! -f "sparams/scenario_${sid_pad}.s16p" ]]; then
   echo "ERROR: missing sparams/scenario_${sid_pad}.s16p after build_s16p"
@@ -279,7 +290,7 @@ EOF
   final_job=$(sbatch --parsable \
     --partition=cpu --cpus-per-task=1 \
     --job-name="final_s${sid_pad}" \
-    --dependency="afterok:${tx_job}" \
+    --dependency="afterany:${tx_job}" \
     --wrap "$finalize_cmd")
 
   echo "Submitted rolling GPU chain for scenario ${sid_pad}."
