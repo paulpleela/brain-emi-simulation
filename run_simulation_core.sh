@@ -57,9 +57,9 @@ echo "USE_GPU=${USE_GPU} DELETE_IN=${DELETE_IN} DELETE_OUT=${DELETE_OUT}"
 echo "Start time: $(date)"
 echo "========================================"
 
-source "$HOME/miniconda3/etc/profile.d/conda.sh"
+source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate gprmax
-PYTHON="$HOME/miniconda3/envs/gprmax/bin/python"
+PYTHON="$(command -v python)"
 
 if [[ "$USE_GPU" == "1" ]]; then
   module load cuda/12.2 || true

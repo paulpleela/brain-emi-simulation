@@ -214,7 +214,7 @@ submit_gpu_parallel_pipeline() {
   mkdir -p logs
 
   # Generate the first scenario inputs immediately (no queued prep job).
-  source "$HOME/miniconda3/etc/profile.d/conda.sh"
+  source "$(conda info --base)/etc/profile.d/conda.sh"
   conda activate gprmax
   python generate_dataset.py --scenario "$sid"
 
@@ -222,11 +222,10 @@ submit_gpu_parallel_pipeline() {
   tx_cmd=$(cat <<EOF
 set -euo pipefail
 cd "${PWD}"
-source "\$HOME/miniconda3/etc/profile.d/conda.sh"
+  source "\$(conda info --base)/etc/profile.d/conda.sh"
 conda activate gprmax
-PYTHON="\$HOME/miniconda3/envs/gprmax/bin/python"
   module load cuda/12.2 || true
-  PYTHON="\$HOME/miniconda3/envs/gprmax/bin/python"
+  PYTHON="\$(command -v python)"
 TX=\$(printf "%02d" \${SLURM_ARRAY_TASK_ID})
   "\$PYTHON" -m gprMax brain_inputs/scenario_${sid_pad}_tx\${TX}.in -n 1 -gpu
 EOF
@@ -250,8 +249,9 @@ EOF
   finalize_cmd=$(cat <<EOF
 set -euo pipefail
 cd "${PWD}"
-source "\$HOME/miniconda3/etc/profile.d/conda.sh"
+  source "\$(conda info --base)/etc/profile.d/conda.sh"
 conda activate gprmax
+  PYTHON="\$(command -v python)"
 
 TX_JOB_ID="${tx_job}"
 TX_STATE=\$(sacct -n -X -j "\$TX_JOB_ID" --format=State 2>/dev/null | head -n 1 | awk '{print \$1}')

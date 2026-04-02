@@ -26,6 +26,7 @@ import os
 import h5py
 import numpy as np
 import argparse
+import re
 
 
 # ============================================================================
@@ -213,6 +214,19 @@ def process_scenario(scenario_id):
         print(f"  SKIP: {len(missing)} .out files missing (simulations not done yet?)")
         return False
 
+    # Guard against stale .out files (e.g. inputs regenerated but simulations not rerun).
+    for tx in range(1, N_PORTS + 1):
+        in_file = os.path.join(INPUT_DIR, f"scenario_{scenario_id:03d}_tx{tx:02d}.in")
+        out_file = os.path.join(INPUT_DIR, f"scenario_{scenario_id:03d}_tx{tx:02d}.out")
+        if os.path.isfile(in_file) and os.path.isfile(out_file):
+            if os.path.getmtime(out_file) < os.path.getmtime(in_file):
+                print(
+                    f"  ERROR: stale output detected: {os.path.basename(out_file)} is older than "
+                    f"{os.path.basename(in_file)}"
+                )
+                print("         Re-run gprMax simulations for this scenario before extraction.")
+                return False
+
     try:
         S, freqs = compute_s_matrix(scenario_id)
     except Exception as e:
@@ -235,6 +249,34 @@ def process_scenario(scenario_id):
             "  ERROR: S-matrix is identity-like (diag~1, offdiag~0). "
             "Check gprMax outputs and TL/waveform setup."
         )
+        print(f"         Diagnostics: diag_mean={diag_mean:.6f}, offdiag_mean={off_mean:.3e}")
+
+        # Try to provide actionable diagnostics from tx01 raw TL traces.
+        sample_out = os.path.join(INPUT_DIR, f"scenario_{scenario_id:03d}_tx01.out")
+        if os.path.isfile(sample_out):
+            try:
+                tls, _, _ = read_tl_data(sample_out)
+                if 1 in tls:
+                    vinc_rms = float(np.sqrt(np.mean(np.square(np.abs(tls[1]['Vinc'])))))
+                    print(f"         tx01 tl1 Vinc RMS: {vinc_rms:.3e}")
+                if 2 in tls:
+                    rx2_rms = float(np.sqrt(np.mean(np.square(np.abs(tls[2]['Vtotal'])))))
+                    print(f"         tx01 tl2 Vtotal RMS: {rx2_rms:.3e}")
+                    if rx2_rms < 1e-15:
+                        print("         tl2 appears numerically zero -> receiver channels not carrying signal.")
+            except Exception as e:
+                print(f"         Could not inspect raw TL traces: {e}")
+
+        sample_in = os.path.join(INPUT_DIR, f"scenario_{scenario_id:03d}_tx01.in")
+        if os.path.isfile(sample_in):
+            try:
+                with open(sample_in, "r") as f:
+                    text = f.read()
+                m = re.search(r"#waveform:\s+gaussian\s+([0-9eE+\-.]+)\s+[0-9eE+\-.]+\s+rx_null", text)
+                if m:
+                    print(f"         rx_null amplitude in tx01.in: {m.group(1)}")
+            except Exception:
+                pass
         return False
 
     out_path = os.path.join(OUTPUT_DIR, f"scenario_{scenario_id:03d}.s16p")
