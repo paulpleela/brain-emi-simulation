@@ -32,7 +32,7 @@
 # Tunables via environment variables:
 #   START_SCENARIO (default 1)
 #   END_SCENARIO   (default START_SCENARIO)
-#   USE_GPU        (0/1, default 0)
+#   USE_GPU        (0/1, default 1)
 #   DELETE_OUT     (0/1, default 1)
 #   DELETE_IN      (0/1, default 1)
 
@@ -40,7 +40,7 @@ set -euo pipefail
 
 START_SCENARIO="${START_SCENARIO:-1}"
 END_SCENARIO="${END_SCENARIO:-$START_SCENARIO}"
-USE_GPU="${USE_GPU:-0}"
+USE_GPU="${USE_GPU:-1}"
 DELETE_OUT="${DELETE_OUT:-1}"
 DELETE_IN="${DELETE_IN:-1}"
 
@@ -108,7 +108,7 @@ for sid in $(seq "$START_SCENARIO" "$END_SCENARIO"); do
 done
 
 # Build train-fit normalized frequency-domain tensors for the processed range.
-"$PYTHON" build_time_dataset.py --range "$START_SCENARIO" "$END_SCENARIO" --fit-stats
+"$PYTHON" build_fd_tensors.py --range "$START_SCENARIO" "$END_SCENARIO" --fit-stats
 
 echo ""
 echo "========================================"

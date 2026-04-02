@@ -151,12 +151,12 @@ Output folder: [sparams](sparams)
 ### From `.s16p` to training tensors (frequency full-S only)
 
 ```bash
-conda run -n brain-emi-simulation python build_time_dataset.py --scenario 1
-conda run -n brain-emi-simulation python build_time_dataset.py --range 1 100
-conda run -n brain-emi-simulation python build_time_dataset.py --all
+conda run -n brain-emi-simulation python build_fd_tensors.py --scenario 1
+conda run -n brain-emi-simulation python build_fd_tensors.py --range 1 100
+conda run -n brain-emi-simulation python build_fd_tensors.py --all
 
 # Fit train-only normalization stats and generate tensors for all selected scenarios
-conda run -n brain-emi-simulation python build_time_dataset.py --all --fit-stats
+conda run -n brain-emi-simulation python build_fd_tensors.py --all --fit-stats
 ```
 
 Output folder: [fd_tensors](fd_tensors)
@@ -194,7 +194,7 @@ conda run -n brain-emi-simulation python visualise_s16p.py sparams/scenario_001.
 - [run_simulation_gpu.sh](run_simulation_gpu.sh): default GPU SLURM sequential pipeline
 - [run_simulation_core.sh](run_simulation_core.sh): shared sequential engine
 - [build_s16p.py](build_s16p.py): `.out -> .s16p`
-- [build_time_dataset.py](build_time_dataset.py): `.s16p -> frequency-domain full-S tensors with train-fit normalization`
+- [build_fd_tensors.py](build_fd_tensors.py): `.s16p -> frequency-domain full-S tensors with train-fit normalization`
 - [run_extraction_pipeline.py](run_extraction_pipeline.py): combined extraction wrapper
 - [visualise_s16p.py](visualise_s16p.py): S-parameter plotting
 

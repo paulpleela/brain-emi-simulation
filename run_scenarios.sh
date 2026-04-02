@@ -224,8 +224,11 @@ set -euo pipefail
 cd "${PWD}"
 source "\$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate gprmax
+PYTHON="\$HOME/miniconda3/envs/gprmax/bin/python"
+  module load cuda/12.2 || true
+  PYTHON="\$HOME/miniconda3/envs/gprmax/bin/python"
 TX=\$(printf "%02d" \${SLURM_ARRAY_TASK_ID})
-python -m gprMax brain_inputs/scenario_${sid_pad}_tx\${TX}.in -n 1 -gpu
+  "\$PYTHON" -m gprMax brain_inputs/scenario_${sid_pad}_tx\${TX}.in -n 1 -gpu
 EOF
 )
 
@@ -261,7 +264,7 @@ if [[ "\$TX_STATE" != "COMPLETED" ]]; then
   exit 1
 fi
 
-python build_s16p.py --scenario ${sid} --no-delete
+"\$PYTHON" build_s16p.py --scenario ${sid} --no-delete
 if [[ ! -f "sparams/scenario_${sid_pad}.s16p" ]]; then
   echo "ERROR: missing sparams/scenario_${sid_pad}.s16p after build_s16p"
   exit 1
@@ -296,13 +299,13 @@ if [[ "\$NEXT_SCENARIO" -le "${END_SCENARIO}" ]]; then
   fi
   eval "FIRST_SCENARIO=${FIRST_SCENARIO} bash run_scenarios.sh \$NEXT_ARGS"
 else
-  python build_time_dataset.py --range ${FIRST_SCENARIO} ${END_SCENARIO} --fit-stats
+  "\$PYTHON" build_fd_tensors.py --range ${FIRST_SCENARIO} ${END_SCENARIO} --fit-stats
   if [[ ! -f "fd_tensors/scenario_${sid_pad}_fd.npz" ]]; then
-    echo "ERROR: missing fd_tensors/scenario_${sid_pad}_fd.npz after build_time_dataset"
+    echo "ERROR: missing fd_tensors/scenario_${sid_pad}_fd.npz after build_fd_tensors"
     exit 1
   fi
   if [[ ! -f "fd_tensors/normalization_freq_full.npz" ]]; then
-    echo "ERROR: missing fd_tensors/normalization_freq_full.npz after build_time_dataset"
+    echo "ERROR: missing fd_tensors/normalization_freq_full.npz after build_fd_tensors"
     exit 1
   fi
 fi

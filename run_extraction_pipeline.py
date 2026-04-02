@@ -1,7 +1,7 @@
 """
 Run the full extraction pipeline:
   1) .out -> .s16p      via build_s16p.py
-    2) .s16p -> .npz FD   via build_time_dataset.py
+        2) .s16p -> .npz FD   via build_fd_tensors.py
 
 Usage examples:
   python run_extraction_pipeline.py --scenario 1
@@ -56,7 +56,7 @@ def main() -> None:
     # Stage 2: .s16p -> frequency-domain npz
     cmd_stage2 = [
         sys.executable,
-        "build_time_dataset.py",
+        "build_fd_tensors.py",
         *selector,
         "--input-dir",
         args.input_dir,

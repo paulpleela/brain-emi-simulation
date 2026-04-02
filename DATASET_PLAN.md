@@ -89,7 +89,7 @@ Split is deterministic from `scenario_id`.
 
 ## ML Input Format
 
-Current NPZ output from [build_time_dataset.py](build_time_dataset.py):
+Current NPZ output from [build_fd_tensors.py](build_fd_tensors.py):
 
 - Key `signal`: shape `(32, T)`
 - Key `channels`: channel names
