@@ -115,6 +115,11 @@ def compute_s_matrix(scenario_id):
             continue
 
         tls, dt, n_it = read_tl_data(fname)
+        if len(tls) != N_PORTS:
+            raise RuntimeError(
+                f"{os.path.basename(fname)} has {len(tls)} TL channels; expected {N_PORTS}. "
+                "Likely input generation or gprMax TL recording issue."
+            )
 
         # Build frequency axis on first file
         if freqs is None:
@@ -216,6 +221,20 @@ def process_scenario(scenario_id):
 
     if S is None or freqs is None:
         print("  ERROR: no data extracted")
+        return False
+
+    # Reject pathological identity-like outputs (diag~1, offdiag~0) from broken runs.
+    mag = np.abs(S)
+    diag = mag[np.arange(N_PORTS), np.arange(N_PORTS), :]
+    off = mag.copy()
+    off[np.arange(N_PORTS), np.arange(N_PORTS), :] = 0.0
+    diag_mean = float(np.mean(diag))
+    off_mean = float(np.mean(off))
+    if diag_mean > 0.95 and off_mean < 1e-6:
+        print(
+            "  ERROR: S-matrix is identity-like (diag~1, offdiag~0). "
+            "Check gprMax outputs and TL/waveform setup."
+        )
         return False
 
     out_path = os.path.join(OUTPUT_DIR, f"scenario_{scenario_id:03d}.s16p")

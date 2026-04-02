@@ -237,7 +237,8 @@ def write_scenario(row, output_dir):
 
             f.write("## Waveforms\n")
             f.write("#waveform: gaussian 1 1.25e9 tx_pulse\n")
-            f.write("#waveform: gaussian 0 1.25e9 rx_null\n\n")
+            # Keep receiver excitation effectively zero while ensuring TL channels are retained.
+            f.write("#waveform: gaussian 1e-12 1.25e9 rx_null\n\n")
 
             f.write("## Antenna array (16 z-directed wire dipoles at equatorial ring)\n")
             f.write("#python:\n")
