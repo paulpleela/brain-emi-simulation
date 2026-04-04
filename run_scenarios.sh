@@ -218,6 +218,14 @@ submit_gpu_parallel_pipeline() {
   # Generate the first scenario inputs immediately (no queued prep job).
   source "$(conda info --base)/etc/profile.d/conda.sh"
   conda activate "${CONDA_ENV_NAME}"
+  if ! python - <<'PY' >/dev/null 2>&1
+import numpy
+PY
+  then
+    echo "ERROR: numpy is missing in conda env '${CONDA_ENV_NAME}'."
+    echo "Install it with: conda activate ${CONDA_ENV_NAME} && conda install -y numpy"
+    exit 1
+  fi
   if [[ -d "${PWD}/gprMax/gprMax" ]]; then
     export PYTHONPATH="${PWD}/gprMax:${PYTHONPATH:-}"
   fi
