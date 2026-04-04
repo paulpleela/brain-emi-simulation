@@ -13,7 +13,8 @@
 #   3) Extract .s16p
 #   4) Delete that scenario's .in/.out files
 #   5) Move to next scenario
-#   6) After range completes, build frequency-domain full-S tensors once
+#   6) Build each scenario's frequency-domain tensor immediately after extraction
+#   7) After range completes, refresh train-only normalization stats
 #
 # Default mode processes scenario 1 only.
 #
@@ -108,7 +109,10 @@ for sid in $(seq "$START_SCENARIO" "$END_SCENARIO"); do
   # 3) Extract S-parameters
   "$PYTHON" build_s16p.py --scenario "$sid" --no-delete
 
-  # 4) Delete intermediate files for this scenario
+  # 4) Build this scenario's FD tensor immediately.
+  "$PYTHON" build_fd_tensors.py --scenario "$sid"
+
+  # 5) Delete intermediate files for this scenario
   if [[ "$DELETE_IN" == "1" ]]; then
     rm -f "brain_inputs/scenario_${sid_pad}_tx"*.in
   fi
@@ -120,8 +124,8 @@ for sid in $(seq "$START_SCENARIO" "$END_SCENARIO"); do
   echo "Scenario ${sid_pad} complete"
 done
 
-# Build train-fit normalized frequency-domain tensors for the processed range.
-"$PYTHON" build_fd_tensors.py --range "$START_SCENARIO" "$END_SCENARIO" --fit-stats
+# Refresh train-only normalization stats after the range finishes.
+"$PYTHON" build_fd_tensors.py --fit-stats --fit-only
 
 echo ""
 echo "========================================"

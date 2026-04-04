@@ -296,6 +296,8 @@ if [[ "${DELETE_OUT}" == "1" ]]; then
   rm -f brain_inputs/scenario_${sid_pad}_tx*.out
 fi
 
+"\$PYTHON" build_fd_tensors.py --scenario ${sid}
+
 if [[ "${DELETE_SLURM_LOGS}" == "1" ]]; then
   rm -f logs/tx_s${sid_pad}_${tx_job}_*.out logs/tx_s${sid_pad}_${tx_job}_*.err
   rm -f "logs/final_s${sid_pad}_\${SLURM_JOB_ID}.out" "logs/final_s${sid_pad}_\${SLURM_JOB_ID}.err"
@@ -318,7 +320,7 @@ if [[ "\$NEXT_SCENARIO" -le "${END_SCENARIO}" ]]; then
   fi
   eval "FIRST_SCENARIO=${FIRST_SCENARIO} bash run_scenarios.sh \$NEXT_ARGS"
 else
-  "\$PYTHON" build_fd_tensors.py --range ${FIRST_SCENARIO} ${END_SCENARIO} --fit-stats
+  "\$PYTHON" build_fd_tensors.py --fit-stats --fit-only
   if [[ ! -f "fd_tensors/scenario_${sid_pad}_fd.npz" ]]; then
     echo "ERROR: missing fd_tensors/scenario_${sid_pad}_fd.npz after build_fd_tensors"
     exit 1
