@@ -75,6 +75,8 @@ RUN_LOCAL=0
 DELETE_IN=1
 DELETE_OUT=1
 DELETE_SLURM_LOGS=1
+CONDA_ENV_NAME="${CONDA_ENV_NAME:-${CONDA_DEFAULT_ENV:-gprmax}}"
+GPRMAX_MODULE="${GPRMAX_MODULE:-gprMax}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -215,7 +217,10 @@ submit_gpu_parallel_pipeline() {
 
   # Generate the first scenario inputs immediately (no queued prep job).
   source "$(conda info --base)/etc/profile.d/conda.sh"
-  conda activate gprmax
+  conda activate "${CONDA_ENV_NAME}"
+  if [[ -d "${PWD}/gprMax/gprMax" ]]; then
+    export PYTHONPATH="${PWD}/gprMax:${PYTHONPATH:-}"
+  fi
   python generate_dataset.py --scenario "$sid"
 
   local tx_cmd
@@ -223,11 +228,14 @@ submit_gpu_parallel_pipeline() {
 set -euo pipefail
 cd "${PWD}"
   source "\$(conda info --base)/etc/profile.d/conda.sh"
-conda activate gprmax
+  conda activate "${CONDA_ENV_NAME}"
+  if [[ -d "${PWD}/gprMax/gprMax" ]]; then
+    export PYTHONPATH="${PWD}/gprMax:\${PYTHONPATH:-}"
+  fi
   module load cuda/12.2 || true
   PYTHON="\$(command -v python)"
 TX=\$(printf "%02d" \${SLURM_ARRAY_TASK_ID})
-  "\$PYTHON" -m gprMax brain_inputs/scenario_${sid_pad}_tx\${TX}.in -n 1 -gpu
+  "\$PYTHON" -m ${GPRMAX_MODULE} brain_inputs/scenario_${sid_pad}_tx\${TX}.in -n 1 -gpu
 EOF
 )
 
@@ -250,7 +258,10 @@ EOF
 set -euo pipefail
 cd "${PWD}"
   source "\$(conda info --base)/etc/profile.d/conda.sh"
-conda activate gprmax
+  conda activate "${CONDA_ENV_NAME}"
+  if [[ -d "${PWD}/gprMax/gprMax" ]]; then
+    export PYTHONPATH="${PWD}/gprMax:\${PYTHONPATH:-}"
+  fi
   PYTHON="\$(command -v python)"
 
 TX_JOB_ID="${tx_job}"

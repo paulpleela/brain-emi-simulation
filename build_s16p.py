@@ -86,20 +86,12 @@ def compute_s_matrix(scenario_id):
     Build the full 16x16 S-matrix for one scenario.
 
     In each simulation file scenario_XXX_txJJ.out, antenna J is the transmitter
-    and antennas 1-16 are all recorded. gprMax stores:
-        Vinc   = forward-travelling (incident) voltage on the TL
-        Vtotal = total voltage = Vinc + Vrefl  (at transmitter)
-                               = transmitted signal (at receivers, since Vinc=0 there)
+    and antennas 1-16 are all recorded.
 
-    S_ij = scattered wave at port i / incident wave at port j
-
-    For the transmitter port (i == j):
-        Vrefl = Vtotal - Vinc   (reflected wave)
-        S_jj  = Vrefl / Vinc
-
-    For receiver ports (i != j):
-        Vtotal_i = transmitted signal arriving at port i (Vinc=0 there)
-        S_ij = Vtotal_i / Vinc_j   (normalise by transmitter incident wave)
+    We compute S-parameters using wave variables to be robust to TL conventions:
+        a_j = (Vinc_j + Z0*Iinc_j) / (2*sqrt(Z0))
+        b_i = (Vtotal_i - Z0*Itotal_i) / (2*sqrt(Z0))
+        S_ij = b_i / a_j
 
     Returns:
         S      : ndarray  (N_PORTS, N_PORTS, n_freq_keep)  complex
@@ -130,26 +122,23 @@ def compute_s_matrix(scenario_id):
             n_freq    = len(freqs)
             S         = np.zeros((N_PORTS, N_PORTS, n_freq), dtype=complex)
 
-        # Reference: incident wave at the active transmitter port
+        # Incident wave at active transmitter port.
         Vinc_j = np.fft.rfft(tls[tx]['Vinc'])[freq_mask]
+        Iinc_j = np.fft.rfft(tls[tx]['Iinc'])[freq_mask]
+        a_j = (Vinc_j + Z0 * Iinc_j) / (2.0 * np.sqrt(Z0))
 
-        # Avoid divide-by-zero where incident wave is negligible
-        safe = np.abs(Vinc_j) > 1e-30
+        # Avoid divide-by-zero where incident wave is negligible.
+        safe = np.abs(a_j) > 1e-30
 
         # Column j of S-matrix
         for rx in range(1, N_PORTS + 1):
             if rx not in tls:
                 continue
 
-            if rx == tx:
-                # S_jj (reflection): Vrefl = Vtotal - Vinc
-                Vtotal = np.fft.rfft(tls[rx]['Vtotal'])[freq_mask]
-                Vrefl  = Vtotal - Vinc_j
-                S[rx-1, tx-1, :] = np.where(safe, Vrefl / Vinc_j, 0.0)
-            else:
-                # S_ij (transmission): Vtotal at receiver = transmitted signal
-                Vtotal_rx = np.fft.rfft(tls[rx]['Vtotal'])[freq_mask]
-                S[rx-1, tx-1, :] = np.where(safe, Vtotal_rx / Vinc_j, 0.0)
+            Vtotal_i = np.fft.rfft(tls[rx]['Vtotal'])[freq_mask]
+            Itotal_i = np.fft.rfft(tls[rx]['Itotal'])[freq_mask]
+            b_i = (Vtotal_i - Z0 * Itotal_i) / (2.0 * np.sqrt(Z0))
+            S[rx-1, tx-1, :] = np.where(safe, b_i / a_j, 0.0)
 
     return S, freqs
 
@@ -262,6 +251,8 @@ def process_scenario(scenario_id):
                 if 2 in tls:
                     rx2_rms = float(np.sqrt(np.mean(np.square(np.abs(tls[2]['Vtotal'])))))
                     print(f"         tx01 tl2 Vtotal RMS: {rx2_rms:.3e}")
+                    rx2_i_rms = float(np.sqrt(np.mean(np.square(np.abs(tls[2]['Itotal'])))))
+                    print(f"         tx01 tl2 Itotal RMS: {rx2_i_rms:.3e}")
                     if rx2_rms < 1e-15:
                         print("         tl2 appears numerically zero -> receiver channels not carrying signal.")
             except Exception as e:

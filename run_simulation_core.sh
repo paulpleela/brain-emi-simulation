@@ -43,6 +43,7 @@ END_SCENARIO="${END_SCENARIO:-$START_SCENARIO}"
 USE_GPU="${USE_GPU:-1}"
 DELETE_OUT="${DELETE_OUT:-1}"
 DELETE_IN="${DELETE_IN:-1}"
+CONDA_ENV_NAME="${CONDA_ENV_NAME:-${CONDA_DEFAULT_ENV:-gprmax}}"
 
 if [[ "$START_SCENARIO" -gt "$END_SCENARIO" ]]; then
   echo "ERROR: START_SCENARIO must be <= END_SCENARIO"
@@ -58,8 +59,12 @@ echo "Start time: $(date)"
 echo "========================================"
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate gprmax
+conda activate "${CONDA_ENV_NAME}"
+if [[ -d "${PWD}/gprMax/gprMax" ]]; then
+  export PYTHONPATH="${PWD}/gprMax:${PYTHONPATH:-}"
+fi
 PYTHON="$(command -v python)"
+GPRMAX_MODULE="${GPRMAX_MODULE:-gprMax}"
 
 if [[ "$USE_GPU" == "1" ]]; then
   module load cuda/12.2 || true
@@ -85,10 +90,10 @@ for sid in $(seq "$START_SCENARIO" "$END_SCENARIO"); do
 
     echo "Running ${input_file}"
     if [[ "$USE_GPU" == "1" ]]; then
-      "$PYTHON" -m gprMax "$input_file" -n 1 -gpu
+      "$PYTHON" -m "$GPRMAX_MODULE" "$input_file" -n 1 -gpu
     else
       export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
-      "$PYTHON" -m gprMax "$input_file" -n 1
+      "$PYTHON" -m "$GPRMAX_MODULE" "$input_file" -n 1
     fi
   done
 
