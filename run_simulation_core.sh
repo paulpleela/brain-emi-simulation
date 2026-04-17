@@ -45,6 +45,7 @@ USE_GPU="${USE_GPU:-1}"
 DELETE_OUT="${DELETE_OUT:-1}"
 DELETE_IN="${DELETE_IN:-1}"
 CONDA_ENV_NAME="${CONDA_ENV_NAME:-gprmax}"
+METADATA_FILE="${METADATA_FILE:-dataset_metadata_v3.csv}"
 
 if [[ "$START_SCENARIO" -gt "$END_SCENARIO" ]]; then
   echo "ERROR: START_SCENARIO must be <= END_SCENARIO"
@@ -56,8 +57,14 @@ echo "gprMax Sequential Scenario Runner"
 echo "Node: ${SLURM_NODELIST:-local}"
 echo "Scenario range: ${START_SCENARIO}..${END_SCENARIO}"
 echo "USE_GPU=${USE_GPU} DELETE_IN=${DELETE_IN} DELETE_OUT=${DELETE_OUT}"
+echo "METADATA_FILE=${METADATA_FILE}"
 echo "Start time: $(date)"
 echo "========================================"
+
+if [[ ! -f "${METADATA_FILE}" ]]; then
+  echo "ERROR: metadata file not found: ${METADATA_FILE}"
+  exit 1
+fi
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate "${CONDA_ENV_NAME}"
@@ -87,7 +94,7 @@ for sid in $(seq "$START_SCENARIO" "$END_SCENARIO"); do
   echo "--- Scenario ${sid_pad} ---"
 
   # 1) Generate exactly this scenario from metadata
-  "$PYTHON" generate_dataset.py --scenario "$sid"
+  "$PYTHON" generate_dataset.py --scenario "$sid" --metadata "${METADATA_FILE}"
 
   # 2) Run all 16 TX simulations
   for tx in $(seq -w 1 16); do
@@ -110,7 +117,7 @@ for sid in $(seq "$START_SCENARIO" "$END_SCENARIO"); do
   "$PYTHON" build_s16p.py --scenario "$sid" --no-delete
 
   # 4) Build this scenario's FD tensor immediately.
-  "$PYTHON" build_fd_tensors.py --scenario "$sid"
+  "$PYTHON" build_fd_tensors.py --scenario "$sid" --metadata "${METADATA_FILE}"
 
   # 5) Delete intermediate files for this scenario
   if [[ "$DELETE_IN" == "1" ]]; then
@@ -125,7 +132,7 @@ for sid in $(seq "$START_SCENARIO" "$END_SCENARIO"); do
 done
 
 # Refresh train-only normalization stats after the range finishes.
-"$PYTHON" build_fd_tensors.py --fit-stats --fit-only
+"$PYTHON" build_fd_tensors.py --fit-stats --fit-only --metadata "${METADATA_FILE}"
 
 echo ""
 echo "========================================"

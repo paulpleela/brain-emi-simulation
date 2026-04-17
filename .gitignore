@@ -17,6 +17,7 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.venv/
 
 # Jupyter notebooks
 .ipynb_checkpoints/
@@ -35,6 +36,9 @@ build/
 /brain_monopole_simulations/
 /logs/
 /sparams_time/
+/sparams
+/fd_tensors
+/deep_learning/outputs/
 
 # Large data
 *.zip

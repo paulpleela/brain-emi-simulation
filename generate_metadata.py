@@ -29,10 +29,14 @@ SIZE_BUCKETS = [
 ]
 
 ANOMALY_MEASUREMENT_CYCLE = [
-    (-0.75, 0.01),
-    (-0.50, 0.02),
-    (-0.25, 0.03),
+    0.01,
+    0.02,
+    0.03,
 ]
+
+NOMINAL_ANTENNA_OFFSET_CELLS = -0.50
+HEAD_SCALE_RANGE = (0.90, 1.10)
+HEAD_ROTATION_RANGE_DEG = (-15.0, 15.0)
 
 FIELDNAMES = [
     "scenario_id",
@@ -45,6 +49,8 @@ FIELDNAMES = [
     "sigma_variation",
     "antenna_offset",
     "coupling_thickness",
+    "head_scale",
+    "head_rotation_deg",
     "noise_level",
     "split",
     "group",
@@ -56,6 +62,14 @@ FIELDNAMES = [
     "background_epsilon_variation",
     "background_sigma_variation",
 ]
+
+
+def sample_head_transform(scenario_id):
+    """Deterministic, label-independent head size and rotation variation."""
+    rng = np.random.RandomState(scenario_id + 100_000)
+    head_scale = float(rng.uniform(*HEAD_SCALE_RANGE))
+    head_rotation_deg = float(rng.uniform(*HEAD_ROTATION_RANGE_DEG))
+    return round(head_scale, 4), round(head_rotation_deg, 4)
 
 
 def assign_split(scenario_id):
@@ -105,23 +119,25 @@ def random_position_by_region(region):
 def make_no_anomaly_sample(scenario_id, group_name):
     np.random.seed(scenario_id)
 
+    head_scale, head_rotation_deg = sample_head_transform(scenario_id)
+
     if group_name == "N1_baseline":
         eps_var = float(np.random.uniform(-2.0, 2.0))
         sig_var = float(np.random.uniform(-2.0, 2.0))
         noise = "low"
-        antenna_offset = -0.50
+        antenna_offset = NOMINAL_ANTENNA_OFFSET_CELLS
         coupling_thickness = 0.020
     elif group_name == "N2_property_variation":
         eps_var = float(np.random.uniform(-10.0, 10.0))
         sig_var = float(np.random.uniform(-10.0, 10.0))
         noise = "low"
-        antenna_offset = -0.50
+        antenna_offset = NOMINAL_ANTENNA_OFFSET_CELLS
         coupling_thickness = 0.020
     else:  # N3_measurement_variation
         eps_var = float(np.random.uniform(-5.0, 5.0))
         sig_var = float(np.random.uniform(-5.0, 5.0))
         noise = "medium"
-        antenna_offset = float(np.random.uniform(-0.75, -0.25))
+        antenna_offset = NOMINAL_ANTENNA_OFFSET_CELLS
         coupling_thickness = float(np.random.uniform(0.01, 0.03))
 
     return {
@@ -135,6 +151,8 @@ def make_no_anomaly_sample(scenario_id, group_name):
         "sigma_variation": round(sig_var, 4),
         "antenna_offset": round(antenna_offset, 4),
         "coupling_thickness": round(coupling_thickness, 4),
+        "head_scale": head_scale,
+        "head_rotation_deg": head_rotation_deg,
         "noise_level": noise,
         "split": assign_split(scenario_id),
         "group": group_name,
@@ -205,6 +223,8 @@ def build_anomaly_plan():
 def make_anomaly_sample(scenario_id, anomaly_index, plan_item, noise_level):
     np.random.seed(scenario_id)
 
+    head_scale, head_rotation_deg = sample_head_transform(scenario_id)
+
     size_mm = float(np.random.uniform(plan_item["size_min"], plan_item["size_max"]))
     lesion_x, lesion_y, lesion_z = random_position_by_region(plan_item["region"])
 
@@ -217,7 +237,8 @@ def make_anomaly_sample(scenario_id, anomaly_index, plan_item, noise_level):
     bg_sig_var = float(np.random.uniform(-10.0, 10.0))
 
     cycle_idx = anomaly_index % len(ANOMALY_MEASUREMENT_CYCLE)
-    antenna_offset, coupling_thickness = ANOMALY_MEASUREMENT_CYCLE[cycle_idx]
+    coupling_thickness = ANOMALY_MEASUREMENT_CYCLE[cycle_idx]
+    antenna_offset = NOMINAL_ANTENNA_OFFSET_CELLS
 
     return {
         "scenario_id": scenario_id,
@@ -230,6 +251,8 @@ def make_anomaly_sample(scenario_id, anomaly_index, plan_item, noise_level):
         "sigma_variation": round(bg_sig_var, 4),
         "antenna_offset": round(antenna_offset, 4),
         "coupling_thickness": round(coupling_thickness, 4),
+        "head_scale": head_scale,
+        "head_rotation_deg": head_rotation_deg,
         "noise_level": noise_level,
         "split": assign_split(scenario_id),
         "group": "A_anomaly",

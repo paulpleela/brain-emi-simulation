@@ -10,6 +10,7 @@
 #   ./run_scenarios.sh --all
 #   ./run_scenarios.sh --all --cpu
 #   ./run_scenarios.sh --range 1 20 --local
+#   ./run_scenarios.sh --range 1 20 --metadata dataset_metadata_v3.csv
 #
 # Default behavior submits to SLURM via sbatch (GPU + TX-parallel by default).
 
@@ -34,6 +35,7 @@ Options:
   --tx-concurrency N  In GPU mode, max concurrent TX tasks (optional cap)
   --tx-cpus N         In GPU mode, CPUs per TX task (default: 2)
   --local             Run directly on current machine (no sbatch)
+  --metadata FILE     Metadata CSV file (default: dataset_metadata_v3.csv)
   --keep-in           Keep generated .in files (default deletes)
   --keep-out          Keep generated .out files (default deletes)
   --keep-slurm-logs   Keep per-scenario SLURM tx/finalize logs (default deletes on success)
@@ -52,7 +54,7 @@ is_int() {
 }
 
 get_total_scenarios() {
-  local metadata="dataset_metadata.csv"
+  local metadata="${METADATA_FILE:-dataset_metadata_v3.csv}"
   if [[ -f "$metadata" ]]; then
     local lines
     lines=$(wc -l < "$metadata")
@@ -77,6 +79,7 @@ DELETE_OUT=1
 DELETE_SLURM_LOGS=1
 CONDA_ENV_NAME="${CONDA_ENV_NAME:-gprmax}"
 GPRMAX_MODULE="${GPRMAX_MODULE:-gprMax}"
+METADATA_FILE="${METADATA_FILE:-dataset_metadata_v3.csv}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -123,6 +126,11 @@ while [[ $# -gt 0 ]]; do
     --local)
       RUN_LOCAL=1
       shift
+      ;;
+    --metadata)
+      [[ $# -ge 2 ]] || { echo "ERROR: --metadata requires a value"; usage; exit 1; }
+      METADATA_FILE="$2"
+      shift 2
       ;;
     --keep-in)
       DELETE_IN=0
@@ -192,6 +200,11 @@ if [[ ! -f "run_simulation_core.sh" ]]; then
   exit 1
 fi
 
+if [[ ! -f "$METADATA_FILE" ]]; then
+  echo "ERROR: metadata file not found: $METADATA_FILE"
+  exit 1
+fi
+
 echo "Mode: ${MODE}"
 echo "Range: ${START_SCENARIO}..${END_SCENARIO}"
 echo "GPU: ${USE_GPU}"
@@ -205,6 +218,7 @@ echo "TX cpus-per-task: ${TX_CPUS}"
 echo "Delete .in: ${DELETE_IN}"
 echo "Delete .out: ${DELETE_OUT}"
 echo "Delete SLURM tx/finalize logs on success: ${DELETE_SLURM_LOGS}"
+echo "Metadata: ${METADATA_FILE}"
 
 FIRST_SCENARIO="${FIRST_SCENARIO:-$START_SCENARIO}"
 
@@ -229,7 +243,7 @@ PY
   if [[ -d "${PWD}/gprMax/gprMax" ]]; then
     export PYTHONPATH="${PWD}/gprMax:${PYTHONPATH:-}"
   fi
-  python generate_dataset.py --scenario "$sid"
+  python generate_dataset.py --scenario "$sid" --metadata "${METADATA_FILE}"
 
   local tx_cmd
   tx_cmd=$(cat <<EOF
@@ -296,7 +310,7 @@ if [[ "${DELETE_OUT}" == "1" ]]; then
   rm -f brain_inputs/scenario_${sid_pad}_tx*.out
 fi
 
-"\$PYTHON" build_fd_tensors.py --scenario ${sid}
+"\$PYTHON" build_fd_tensors.py --scenario ${sid} --metadata "${METADATA_FILE}"
 
 if [[ "${DELETE_SLURM_LOGS}" == "1" ]]; then
   rm -f logs/tx_s${sid_pad}_${tx_job}_*.out logs/tx_s${sid_pad}_${tx_job}_*.err
@@ -306,6 +320,7 @@ fi
 NEXT_SCENARIO=\$(( ${sid} + 1 ))
 if [[ "\$NEXT_SCENARIO" -le "${END_SCENARIO}" ]]; then
   NEXT_ARGS="--range \"\$NEXT_SCENARIO\" \"${END_SCENARIO}\" --gpu --tx-cpus ${TX_CPUS}"
+  NEXT_ARGS="\$NEXT_ARGS --metadata \"${METADATA_FILE}\""
   if [[ -n "${TX_CONCURRENCY}" ]]; then
     NEXT_ARGS="\$NEXT_ARGS --tx-concurrency ${TX_CONCURRENCY}"
   fi
@@ -320,7 +335,7 @@ if [[ "\$NEXT_SCENARIO" -le "${END_SCENARIO}" ]]; then
   fi
   eval "FIRST_SCENARIO=${FIRST_SCENARIO} bash run_scenarios.sh \$NEXT_ARGS"
 else
-  "\$PYTHON" build_fd_tensors.py --fit-stats --fit-only
+  "\$PYTHON" build_fd_tensors.py --fit-stats --fit-only --metadata "${METADATA_FILE}"
   if [[ ! -f "fd_tensors/scenario_${sid_pad}_fd.npz" ]]; then
     echo "ERROR: missing fd_tensors/scenario_${sid_pad}_fd.npz after build_fd_tensors"
     exit 1
@@ -356,6 +371,7 @@ if [[ "$RUN_LOCAL" == "1" ]]; then
   START_SCENARIO="$START_SCENARIO" \
   END_SCENARIO="$END_SCENARIO" \
   USE_GPU="$USE_GPU" \
+  METADATA_FILE="$METADATA_FILE" \
   DELETE_IN="$DELETE_IN" \
   DELETE_OUT="$DELETE_OUT" \
   bash run_simulation_core.sh
@@ -363,7 +379,7 @@ else
   if [[ "$USE_GPU" == "1" && "$GPU_TX_PARALLEL" == "1" ]]; then
     submit_gpu_parallel_pipeline
   else
-    export_vars="ALL,START_SCENARIO=${START_SCENARIO},END_SCENARIO=${END_SCENARIO},USE_GPU=${USE_GPU},DELETE_IN=${DELETE_IN},DELETE_OUT=${DELETE_OUT}"
+    export_vars="ALL,START_SCENARIO=${START_SCENARIO},END_SCENARIO=${END_SCENARIO},USE_GPU=${USE_GPU},METADATA_FILE=${METADATA_FILE},DELETE_IN=${DELETE_IN},DELETE_OUT=${DELETE_OUT}"
     mkdir -p logs
     if [[ "$USE_GPU" == "1" ]]; then
       echo "Submitting GPU sequential SLURM job (--tx-sequential)..."

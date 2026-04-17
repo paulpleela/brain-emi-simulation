@@ -186,6 +186,20 @@ Also supports `--range` and `--all`.
 conda run -n brain-emi-simulation python visualise_s16p.py sparams/scenario_001.s16p
 ```
 
+### Scenario head model setup
+
+```bash
+conda run -n brain-emi-simulation python visualise_head_model.py --scenario 317
+```
+
+This renders the scenario-specific head cross-section with lesion position,
+antenna ring, coupling thickness, and metadata labels.
+
+## Metadata reference
+
+See [DATASET_METADATA_TABLE.md](DATASET_METADATA_TABLE.md) for a column-by-column
+summary of `dataset_metadata.csv`, including value ranges and category counts.
+
 ## Key Scripts
 
 - [generate_metadata.py](generate_metadata.py): stratified deterministic metadata generator

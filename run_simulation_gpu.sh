@@ -28,5 +28,6 @@ export END_SCENARIO="${END_SCENARIO:-1000}"
 export USE_GPU=1
 export DELETE_OUT="${DELETE_OUT:-1}"
 export DELETE_IN="${DELETE_IN:-1}"
+export METADATA_FILE="${METADATA_FILE:-dataset_metadata_v3.csv}"
 
 bash run_simulation_core.sh
