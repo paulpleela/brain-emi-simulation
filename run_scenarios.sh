@@ -12,7 +12,7 @@
 #   ./run_scenarios.sh --range 1 20 --local
 #   ./run_scenarios.sh --range 1 20 --metadata dataset_metadata_v3.csv
 #
-# Default behavior submits to SLURM via sbatch (GPU + TX-parallel by default).
+# Default behavior submits to SLURM via sbatch (GPU + scenario-parallel by default).
 
 set -euo pipefail
 
@@ -42,10 +42,9 @@ Options:
   -h, --help          Show this help
 
 Notes:
-  - Default GPU mode: each scenario runs 16 TX jobs in parallel (one GPU per TX),
-    while scenarios remain sequential.
-  - GPU mode uses a queued CPU finalize job dependent on TX completion.
-  - CPU mode or --tx-sequential uses run_simulation_core.sh.
+  - Default GPU mode: one full scenario per GPU job, with max 3 scenarios in flight.
+  - Use --tx-parallel to restore legacy mode where each TX is a separate job.
+  - CPU mode uses run_simulation_core.sh sequentially over the selected range.
 EOF
 }
 
@@ -70,9 +69,10 @@ MODE=""
 START_SCENARIO=""
 END_SCENARIO=""
 USE_GPU=1
-GPU_TX_PARALLEL=1
+GPU_TX_PARALLEL=0
 TX_CONCURRENCY=""
 TX_CPUS=2
+SCENARIO_CONCURRENCY=3
 RUN_LOCAL=0
 DELETE_IN=1
 DELETE_OUT=1
@@ -113,9 +113,18 @@ while [[ $# -gt 0 ]]; do
       GPU_TX_PARALLEL=0
       shift
       ;;
+    --tx-parallel)
+      GPU_TX_PARALLEL=1
+      shift
+      ;;
     --tx-concurrency)
       [[ $# -ge 2 ]] || { echo "ERROR: --tx-concurrency requires a value"; usage; exit 1; }
       TX_CONCURRENCY="$2"
+      shift 2
+      ;;
+    --scenario-concurrency)
+      [[ $# -ge 2 ]] || { echo "ERROR: --scenario-concurrency requires a value"; usage; exit 1; }
+      SCENARIO_CONCURRENCY="$2"
       shift 2
       ;;
     --tx-cpus)
@@ -195,6 +204,11 @@ if ! is_int "$TX_CPUS" || [[ "$TX_CPUS" -lt 1 ]]; then
   exit 1
 fi
 
+if ! is_int "$SCENARIO_CONCURRENCY" || [[ "$SCENARIO_CONCURRENCY" -lt 1 ]]; then
+  echo "ERROR: --scenario-concurrency must be an integer >= 1"
+  exit 1
+fi
+
 if [[ ! -f "run_simulation_core.sh" ]]; then
   echo "ERROR: run_simulation_core.sh not found. Run from repository root."
   exit 1
@@ -209,6 +223,7 @@ echo "Mode: ${MODE}"
 echo "Range: ${START_SCENARIO}..${END_SCENARIO}"
 echo "GPU: ${USE_GPU}"
 echo "GPU TX parallel: ${GPU_TX_PARALLEL}"
+echo "Scenario concurrency: ${SCENARIO_CONCURRENCY}"
 if [[ -n "$TX_CONCURRENCY" ]]; then
   echo "TX concurrency cap: ${TX_CONCURRENCY}"
 else
@@ -221,6 +236,62 @@ echo "Delete SLURM tx/finalize logs on success: ${DELETE_SLURM_LOGS}"
 echo "Metadata: ${METADATA_FILE}"
 
 FIRST_SCENARIO="${FIRST_SCENARIO:-$START_SCENARIO}"
+
+submit_gpu_scenario_parallel() {
+  mkdir -p logs
+
+  local array_spec="${START_SCENARIO}-${END_SCENARIO}%${SCENARIO_CONCURRENCY}"
+
+  local scenario_cmd
+  scenario_cmd=$(cat <<EOF
+set -euo pipefail
+cd "${PWD}"
+START_SCENARIO=\${SLURM_ARRAY_TASK_ID} \
+END_SCENARIO=\${SLURM_ARRAY_TASK_ID} \
+USE_GPU=1 \
+DELETE_IN=${DELETE_IN} \
+DELETE_OUT=${DELETE_OUT} \
+CONDA_ENV_NAME=${CONDA_ENV_NAME} \
+GPRMAX_MODULE=${GPRMAX_MODULE} \
+METADATA_FILE=${METADATA_FILE} \
+SKIP_FINAL_STATS=1 \
+bash run_simulation_core.sh
+EOF
+)
+
+  local scenario_job
+  scenario_job=$(sbatch --parsable \
+    --partition=a100 --gres=gpu:1 --cpus-per-task=${TX_CPUS} \
+    --array="${array_spec}" \
+    --job-name="scn_gpu" \
+    --output="logs/scn_gpu_%A_%a.out" \
+    --error="logs/scn_gpu_%A_%a.err" \
+    --wrap "$scenario_cmd")
+
+  local stats_cmd
+  stats_cmd=$(cat <<EOF
+set -euo pipefail
+cd "${PWD}"
+source "\$(conda info --base)/etc/profile.d/conda.sh"
+conda activate "${CONDA_ENV_NAME}"
+PYTHON="\$(command -v python)"
+"\$PYTHON" build_fd_tensors.py --fit-stats --fit-only --metadata "${METADATA_FILE}"
+EOF
+)
+
+  local stats_job
+  stats_job=$(sbatch --parsable \
+    --partition=cpu --cpus-per-task=1 \
+    --job-name="fit_stats" \
+    --output="logs/fit_stats_%j.out" \
+    --error="logs/fit_stats_%j.err" \
+    --dependency="afterany:${scenario_job}" \
+    --wrap "$stats_cmd")
+
+  echo "Submitted GPU scenario-array pipeline."
+  echo "Scenario array job: ${scenario_job}"
+  echo "Final stats job: ${stats_job}"
+}
 
 submit_gpu_parallel_pipeline() {
   local sid="$START_SCENARIO"
@@ -378,6 +449,8 @@ if [[ "$RUN_LOCAL" == "1" ]]; then
 else
   if [[ "$USE_GPU" == "1" && "$GPU_TX_PARALLEL" == "1" ]]; then
     submit_gpu_parallel_pipeline
+  elif [[ "$USE_GPU" == "1" ]]; then
+    submit_gpu_scenario_parallel
   else
     export_vars="ALL,START_SCENARIO=${START_SCENARIO},END_SCENARIO=${END_SCENARIO},USE_GPU=${USE_GPU},METADATA_FILE=${METADATA_FILE},DELETE_IN=${DELETE_IN},DELETE_OUT=${DELETE_OUT}"
     mkdir -p logs

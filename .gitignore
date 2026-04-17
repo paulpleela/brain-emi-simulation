@@ -39,6 +39,8 @@ build/
 /sparams
 /fd_tensors
 /deep_learning/outputs/
+/old_sparams
+/old_fd_tensors
 
 # Large data
 *.zip

@@ -46,6 +46,7 @@ DELETE_OUT="${DELETE_OUT:-1}"
 DELETE_IN="${DELETE_IN:-1}"
 CONDA_ENV_NAME="${CONDA_ENV_NAME:-gprmax}"
 METADATA_FILE="${METADATA_FILE:-dataset_metadata_v3.csv}"
+SKIP_FINAL_STATS="${SKIP_FINAL_STATS:-0}"
 
 if [[ "$START_SCENARIO" -gt "$END_SCENARIO" ]]; then
   echo "ERROR: START_SCENARIO must be <= END_SCENARIO"
@@ -132,7 +133,9 @@ for sid in $(seq "$START_SCENARIO" "$END_SCENARIO"); do
 done
 
 # Refresh train-only normalization stats after the range finishes.
-"$PYTHON" build_fd_tensors.py --fit-stats --fit-only --metadata "${METADATA_FILE}"
+if [[ "$SKIP_FINAL_STATS" != "1" ]]; then
+  "$PYTHON" build_fd_tensors.py --fit-stats --fit-only --metadata "${METADATA_FILE}"
+fi
 
 echo ""
 echo "========================================"
