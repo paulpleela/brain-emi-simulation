@@ -33,6 +33,10 @@ SCALE_LEVELS = [0.90, 0.95, 1.00, 1.05, 1.10]
 ROT_LEVELS = [-15.0, -10.0, -5.0, 0.0, 5.0, 10.0, 15.0]
 NOISE_LEVELS = ["low", "medium", "high"]
 
+# N1 baseline should remain plausible/clean while still unique.
+N1_SCALE_LEVELS = [0.96, 0.97, 0.98, 0.99, 1.00, 1.01, 1.02, 1.03, 1.04]
+N1_ROT_LEVELS = [-5.0, -4.0, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+
 SIGNATURE_FIELDS = [
     "has_lesion",
     "lesion_size_mm",
@@ -134,25 +138,31 @@ def assign_variability(rows: List[Dict[str, str]]) -> None:
         anchor["analysis_profile"] = "baseline_nominal"
 
         combos = [
-            (scale, rot, noise)
-            for scale in SCALE_LEVELS
-            for rot in ROT_LEVELS
-            for noise in NOISE_LEVELS
-            if not (scale == 1.00 and rot == 0.0 and noise == "low")
+            (scale, rot)
+            for scale in N1_SCALE_LEVELS
+            for rot in N1_ROT_LEVELS
+            if not (scale == 1.00 and rot == 0.0)
         ]
         for i, row in enumerate(n1_rows[1:]):
-            scale, rot, noise = combos[i % len(combos)]
+            scale, rot = combos[i % len(combos)]
             row["head_scale"] = f"{scale:.4f}"
             row["head_rotation_deg"] = f"{rot:.4f}"
-            row["noise_level"] = noise
+            row["noise_level"] = "low"
             row["analysis_profile"] = "varied"
+            # Keep nominal tissue properties for N1; uniqueness is carried by geometry.
+            row["epsilon_variation"] = "0.0"
+            row["sigma_variation"] = "0.0"
+            if "background_epsilon_variation" in row:
+                row["background_epsilon_variation"] = "0.0"
+            if "background_sigma_variation" in row:
+                row["background_sigma_variation"] = "0.0"
 
 
 def ensure_unique_signatures(rows: List[Dict[str, str]]) -> None:
     """
     Enforce uniqueness of physical signatures used by generate_dataset.py.
 
-    If two rows are physically identical, apply a tiny deterministic perturbation
+    If two rows are physically identical, apply a deterministic perturbation
     to epsilon_variation (and matching background field if present) until unique.
     """
     seen = set()
@@ -163,7 +173,7 @@ def ensure_unique_signatures(rows: List[Dict[str, str]]) -> None:
 
         while True:
             if bump:
-                eps = base_eps + (bump * 0.0001)
+                eps = base_eps + (bump * 0.05)
                 row["epsilon_variation"] = f"{eps:.4f}"
                 if "background_epsilon_variation" in row:
                     row["background_epsilon_variation"] = f"{eps:.4f}"
