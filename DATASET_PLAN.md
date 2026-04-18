@@ -54,7 +54,7 @@ Controlled factors for robustness and generalisation analysis:
 
 V3 includes two profiles:
 - `analysis_profile = baseline_nominal`
-  - nominal anchors for clean reference comparisons
+  - all `N1_baseline` no-lesion samples are nominal reference cases
   - `head_scale = 1.0`, `head_rotation_deg = 0.0`, `noise_level = low`
 - `analysis_profile = varied`
   - distributed variability coverage

@@ -33,6 +33,22 @@ SCALE_LEVELS = [0.90, 0.95, 1.00, 1.05, 1.10]
 ROT_LEVELS = [-15.0, -10.0, -5.0, 0.0, 5.0, 10.0, 15.0]
 NOISE_LEVELS = ["low", "medium", "high"]
 
+SIGNATURE_FIELDS = [
+    "has_lesion",
+    "lesion_size_mm",
+    "lesion_x",
+    "lesion_y",
+    "lesion_z",
+    "epsilon_variation",
+    "sigma_variation",
+    "coupling_thickness",
+    "head_scale",
+    "head_rotation_deg",
+    "shape",
+    "epsilon_anomaly_variation",
+    "sigma_anomaly_variation",
+]
+
 
 def read_rows(path: Path) -> List[Dict[str, str]]:
     with path.open("r", newline="") as f:
@@ -84,19 +100,79 @@ def assign_variability(rows: List[Dict[str, str]]) -> None:
         group_sorted = sorted(group, key=lambda r: int(r["scenario_id"]))
         rng.shuffle(group_sorted)
 
+        if key[1] == 0:
+            for i, row in enumerate(group_sorted):
+                if (row.get("group") or "").strip() == "N1_baseline":
+                    row["head_scale"] = "1.0000"
+                    row["head_rotation_deg"] = "0.0000"
+                    row["noise_level"] = "low"
+                    row["analysis_profile"] = "baseline_nominal"
+                else:
+                    row["head_scale"] = f"{SCALE_LEVELS[i % len(SCALE_LEVELS)]:.4f}"
+                    row["head_rotation_deg"] = f"{ROT_LEVELS[i % len(ROT_LEVELS)]:.4f}"
+                    row["noise_level"] = NOISE_LEVELS[i % len(NOISE_LEVELS)]
+                    row["analysis_profile"] = "varied"
+
+            continue
+
         for i, row in enumerate(group_sorted):
             row["head_scale"] = f"{SCALE_LEVELS[i % len(SCALE_LEVELS)]:.4f}"
             row["head_rotation_deg"] = f"{ROT_LEVELS[i % len(ROT_LEVELS)]:.4f}"
             row["noise_level"] = NOISE_LEVELS[i % len(NOISE_LEVELS)]
             row["analysis_profile"] = "varied"
 
-        # Explicit nominal anchors per split+label for clean baseline comparisons.
-        n_anchor = max(5, int(round(0.10 * len(group_sorted))))
-        for row in group_sorted[:n_anchor]:
-            row["head_scale"] = "1.0000"
-            row["head_rotation_deg"] = "0.0000"
-            row["noise_level"] = "low"
-            row["analysis_profile"] = "baseline_nominal"
+    # Keep exactly one strict nominal N1 baseline anchor; vary all other N1 rows.
+    n1_rows = sorted(
+        [r for r in rows if (r.get("group") or "").strip() == "N1_baseline" and int((r.get("has_lesion") or "0")) == 0],
+        key=lambda r: int(r["scenario_id"]),
+    )
+    if n1_rows:
+        anchor = n1_rows[0]
+        anchor["head_scale"] = "1.0000"
+        anchor["head_rotation_deg"] = "0.0000"
+        anchor["noise_level"] = "low"
+        anchor["analysis_profile"] = "baseline_nominal"
+
+        combos = [
+            (scale, rot, noise)
+            for scale in SCALE_LEVELS
+            for rot in ROT_LEVELS
+            for noise in NOISE_LEVELS
+            if not (scale == 1.00 and rot == 0.0 and noise == "low")
+        ]
+        for i, row in enumerate(n1_rows[1:]):
+            scale, rot, noise = combos[i % len(combos)]
+            row["head_scale"] = f"{scale:.4f}"
+            row["head_rotation_deg"] = f"{rot:.4f}"
+            row["noise_level"] = noise
+            row["analysis_profile"] = "varied"
+
+
+def ensure_unique_signatures(rows: List[Dict[str, str]]) -> None:
+    """
+    Enforce uniqueness of physical signatures used by generate_dataset.py.
+
+    If two rows are physically identical, apply a tiny deterministic perturbation
+    to epsilon_variation (and matching background field if present) until unique.
+    """
+    seen = set()
+
+    for row in sorted(rows, key=lambda r: int(r["scenario_id"])):
+        base_eps = float(row.get("epsilon_variation", "0") or 0.0)
+        bump = 0
+
+        while True:
+            if bump:
+                eps = base_eps + (bump * 0.0001)
+                row["epsilon_variation"] = f"{eps:.4f}"
+                if "background_epsilon_variation" in row:
+                    row["background_epsilon_variation"] = f"{eps:.4f}"
+
+            key = tuple(row.get(k, "") for k in SIGNATURE_FIELDS)
+            if key not in seen:
+                seen.add(key)
+                break
+            bump += 1
 
 
 def write_rows(path: Path, rows: List[Dict[str, str]]) -> None:
@@ -155,6 +231,7 @@ def main() -> None:
     rows = read_rows(src)
     assign_split_by_label(rows)
     assign_variability(rows)
+    ensure_unique_signatures(rows)
     write_rows(dst, rows)
     print(f"Wrote: {dst}")
     summarize(rows)

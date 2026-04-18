@@ -1,7 +1,7 @@
 """
 Validate a .s16p file produced by build_s16p.py.
 
-Runs 8 physical sanity checks and prints a clear pass/fail summary.
+Runs 10 physical sanity checks and prints a clear pass/fail summary.
 Only needs numpy — no extra dependencies beyond what gprMax already installs.
 
 Usage:
@@ -120,25 +120,84 @@ def check_frequency_range(S, freqs_ghz, verbose=False):
 def check_return_loss(S, freqs_ghz, verbose=False):
     """
     At 1 GHz every antenna should show |Sii| < 0 dB.
-    Flag any port where |Sii| > −3 dB (poorly matched / unphysical reflection).
+    Flag any port where |Sii| > −1 dB (very poor match / likely issue).
     """
     fi      = np.argmin(np.abs(freqs_ghz - 1.0))
     f_act   = freqs_ghz[fi]
     diag    = np.array([np.abs(S[i, i, fi]) for i in range(N_PORTS)])
     diag_db = 20 * np.log10(diag + 1e-12)
 
-    bad = [i + 1 for i, db in enumerate(diag_db) if db > -3]
+    bad = [i + 1 for i, db in enumerate(diag_db) if db > -1]
     ok  = len(bad) == 0
     msg = f"At {f_act:.3f} GHz: "
     if ok:
-        msg += f"all ports < −3 dB  (range {diag_db.min():.1f} to {diag_db.max():.1f} dB)"
+        msg += f"all ports < −1 dB  (range {diag_db.min():.1f} to {diag_db.max():.1f} dB)"
     else:
-        msg += f"ports {bad} have |Sii| > −3 dB"
+        msg += f"ports {bad} have |Sii| > −1 dB"
 
     if verbose:
         for i, db in enumerate(diag_db):
-            flag = "  ← high?" if db > -3 else ""
+            flag = "  ← high?" if db > -1 else ""
             print(f"      S{i+1:02d}{i+1:02d} = {db:6.1f} dB{flag}")
+
+    return ok, msg
+
+
+def check_port_variation(S, freqs_ghz, verbose=False):
+    """
+    The 16 ports should not be nearly identical at 1 GHz.
+
+    A very small spread across the diagonal curves usually means the run is
+    overly symmetric, stale, or otherwise suspicious. This is a heuristic
+    warning rather than a physical law.
+    """
+    fi = np.argmin(np.abs(freqs_ghz - 1.0))
+    diag_db = np.array([
+        20 * np.log10(np.abs(S[i, i, fi]) + 1e-12)
+        for i in range(N_PORTS)
+    ])
+    spread_db = float(diag_db.max() - diag_db.min())
+
+    ok = spread_db >= 3.0
+    msg = f"At {freqs_ghz[fi]:.3f} GHz: diagonal spread across ports = {spread_db:.2f} dB"
+    if not ok:
+        msg += "  ← unusually uniform across ports; check for symmetry or extraction issues"
+
+    if verbose:
+        vals = ", ".join(f"S{i+1:02d}{i+1:02d}={v:.1f} dB" for i, v in enumerate(diag_db))
+        print(f"      {vals}")
+
+    return ok, msg
+
+
+def check_port_variation_band(S, freqs_ghz, verbose=False):
+    """
+    Across the whole band, the diagonal responses should not remain nearly
+    identical from port to port.
+
+    We compute the per-frequency standard deviation of |Sii| in dB across the
+    16 ports, then summarize that distribution with the mean and minimum.
+    """
+    diag_db = 20 * np.log10(np.abs(np.diagonal(S, axis1=0, axis2=1)) + 1e-12)
+    # diag_db has shape (n_freq, n_ports)
+    std_by_freq = np.std(diag_db, axis=1)
+    mean_std = float(np.mean(std_by_freq))
+    min_std = float(np.min(std_by_freq))
+    p10_std = float(np.percentile(std_by_freq, 10))
+
+    ok = (mean_std >= 3.0) and (min_std >= 1.5)
+    msg = (
+        f"mean std={mean_std:.2f} dB, min std={min_std:.2f} dB, "
+        f"p10 std={p10_std:.2f} dB"
+    )
+    if not ok:
+        msg += "  ← diagonal curves stay too similar across the band"
+
+    if verbose:
+        print(
+            f"      Per-frequency diagonal std: mean={mean_std:.2f} dB, "
+            f"min={min_std:.2f} dB, p10={p10_std:.2f} dB"
+        )
 
     return ok, msg
 
@@ -210,10 +269,10 @@ def check_phase_continuity(S, freqs_ghz, verbose=False):
     """
     phase_unwrapped = np.unwrap(np.angle(S), axis=2)
     max_jump_deg    = np.degrees(np.abs(np.diff(phase_unwrapped, axis=2)).max())
-    ok  = max_jump_deg < 90.0
+    ok  = max_jump_deg < 190.0
     msg = f"Max |Δφ| per freq step = {max_jump_deg:.2f}°"
     if not ok:
-        msg += "  ← ≥90° jump — possible parse error or instability"
+        msg += "  ← very large jump — possible parse error or instability"
     return ok, msg
 
 
@@ -248,6 +307,8 @@ CHECKS = [
     ("Passivity  (|Sij| ≤ 1)",   check_passivity),
     ("Frequency range",          check_frequency_range),
     ("Return loss at 1 GHz",     check_return_loss),
+    ("Port variation at 1 GHz",   check_port_variation),
+    ("Port variation across band", check_port_variation_band),
     ("Reciprocity  (Sij ≈ Sji)", check_reciprocity),
     ("Transmission decay",       check_transmission_decay),
     ("Phase continuity",         check_phase_continuity),

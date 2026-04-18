@@ -119,21 +119,23 @@ def random_position_by_region(region):
 def make_no_anomaly_sample(scenario_id, group_name):
     np.random.seed(scenario_id)
 
-    head_scale, head_rotation_deg = sample_head_transform(scenario_id)
-
     if group_name == "N1_baseline":
-        eps_var = float(np.random.uniform(-2.0, 2.0))
-        sig_var = float(np.random.uniform(-2.0, 2.0))
+        head_scale = 1.0
+        head_rotation_deg = 0.0
+        eps_var = 0.0
+        sig_var = 0.0
         noise = "low"
         antenna_offset = NOMINAL_ANTENNA_OFFSET_CELLS
         coupling_thickness = 0.020
     elif group_name == "N2_property_variation":
+        head_scale, head_rotation_deg = sample_head_transform(scenario_id)
         eps_var = float(np.random.uniform(-10.0, 10.0))
         sig_var = float(np.random.uniform(-10.0, 10.0))
         noise = "low"
         antenna_offset = NOMINAL_ANTENNA_OFFSET_CELLS
         coupling_thickness = 0.020
     else:  # N3_measurement_variation
+        head_scale, head_rotation_deg = sample_head_transform(scenario_id)
         eps_var = float(np.random.uniform(-5.0, 5.0))
         sig_var = float(np.random.uniform(-5.0, 5.0))
         noise = "medium"

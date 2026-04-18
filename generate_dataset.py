@@ -20,8 +20,18 @@ DEFAULT_METADATA = "dataset_metadata.csv"
 N_ANTENNAS = 16
 CELL = 0.002
 
+DOMAIN_X = float(os.getenv("SIM_DOMAIN_X_M", "0.6"))
+DOMAIN_Y = float(os.getenv("SIM_DOMAIN_Y_M", "0.6"))
+DOMAIN_Z = float(os.getenv("SIM_DOMAIN_Z_M", "0.6"))
+TIME_WINDOW_S = float(os.getenv("SIM_TIME_WINDOW_S", "60e-9"))
+PML_CELLS = int(os.getenv("SIM_PML_CELLS", "10"))
+
+HEAD_CENTER_X = float(os.getenv("HEAD_CENTER_X_M", str(DOMAIN_X / 2.0)))
+HEAD_CENTER_Y = float(os.getenv("HEAD_CENTER_Y_M", str(DOMAIN_Y / 2.0)))
+HEAD_CENTER_Z = float(os.getenv("HEAD_CENTER_Z_M", str(DOMAIN_Z / 2.0)))
+
 HEAD_SEMI_AXES = {'a': 0.095, 'b': 0.075, 'c': 0.115}
-HEAD_CENTER = np.array([0.25, 0.25, 0.25])
+HEAD_CENTER = np.array([HEAD_CENTER_X, HEAD_CENTER_Y, HEAD_CENTER_Z])
 SCALP_SKULL_THICKNESS = 0.010
 GRAY_MATTER_THICKNESS = 0.003
 
@@ -208,9 +218,10 @@ def write_scenario(row, output_dir):
                 f.write("## Healthy baseline\n")
             f.write(f"#title: scenario_{scenario_id:03d}_tx{src_num:02d}\n\n")
 
-            f.write("#domain: 0.6 0.6 0.6\n")
+            f.write(f"#domain: {DOMAIN_X} {DOMAIN_Y} {DOMAIN_Z}\n")
             f.write("#dx_dy_dz: 0.002 0.002 0.002\n")
-            f.write("#time_window: 60e-9\n\n")
+            f.write(f"#time_window: {TIME_WINDOW_S}\n")
+            f.write(f"#pml_cells: {PML_CELLS} {PML_CELLS} {PML_CELLS} {PML_CELLS} {PML_CELLS} {PML_CELLS}\n\n")
 
             f.write("## Materials\n")
             f.write(f"#material: {materials['coupling'][0]:.6f} {materials['coupling'][1]:.6f} 1 0 coupling_medium\n")

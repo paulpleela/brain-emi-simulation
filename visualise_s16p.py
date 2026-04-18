@@ -2,11 +2,11 @@
 Plot S-parameters from a .s16p file.
 
 Shows two panels:
-  Top:    S11 return loss for all 16 ports (diagonal) — reveals antenna resonance
-  Bottom: Off-diagonal transmission S-params grouped by port separation
+    Top:    S11 return loss for all 16 ports (diagonal) — reveals antenna resonance
+    Bottom: Off-diagonal transmission S-params grouped by port separation
 
 Usage:
-    python visualise_s16p.py sparams/scenario_001.s16p
+        python visualise_s16p.py sparams/scenario_001.s16p
 """
 
 import sys
