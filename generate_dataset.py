@@ -20,11 +20,11 @@ DEFAULT_METADATA = "dataset_metadata.csv"
 N_ANTENNAS = 16
 CELL = 0.002
 
-DOMAIN_X = float(os.getenv("SIM_DOMAIN_X_M", "0.6"))
-DOMAIN_Y = float(os.getenv("SIM_DOMAIN_Y_M", "0.6"))
-DOMAIN_Z = float(os.getenv("SIM_DOMAIN_Z_M", "0.6"))
-TIME_WINDOW_S = float(os.getenv("SIM_TIME_WINDOW_S", "60e-9"))
-PML_CELLS = int(os.getenv("SIM_PML_CELLS", "10"))
+DOMAIN_X = float(os.getenv("SIM_DOMAIN_X_M", "0.7"))
+DOMAIN_Y = float(os.getenv("SIM_DOMAIN_Y_M", "0.7"))
+DOMAIN_Z = float(os.getenv("SIM_DOMAIN_Z_M", "0.7"))
+TIME_WINDOW_S = float(os.getenv("SIM_TIME_WINDOW_S", "40e-9"))
+PML_CELLS = int(os.getenv("SIM_PML_CELLS", "20"))
 
 HEAD_CENTER_X = float(os.getenv("HEAD_CENTER_X_M", str(DOMAIN_X / 2.0)))
 HEAD_CENTER_Y = float(os.getenv("HEAD_CENTER_Y_M", str(DOMAIN_Y / 2.0)))
