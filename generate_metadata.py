@@ -28,12 +28,6 @@ SIZE_BUCKETS = [
     ("large", 230, 20.0, 30.0),
 ]
 
-ANOMALY_MEASUREMENT_CYCLE = [
-    (-0.75, 0.01),
-    (-0.50, 0.02),
-    (-0.25, 0.03),
-]
-
 FIELDNAMES = [
     "scenario_id",
     "has_lesion",
@@ -43,8 +37,8 @@ FIELDNAMES = [
     "lesion_z",
     "epsilon_variation",
     "sigma_variation",
-    "antenna_offset",
-    "coupling_thickness",
+    "head_scale",
+    "head_rotation_deg",
     "noise_level",
     "split",
     "group",
@@ -109,20 +103,17 @@ def make_no_anomaly_sample(scenario_id, group_name):
         eps_var = float(np.random.uniform(-2.0, 2.0))
         sig_var = float(np.random.uniform(-2.0, 2.0))
         noise = "low"
-        antenna_offset = -0.50
-        coupling_thickness = 0.020
     elif group_name == "N2_property_variation":
         eps_var = float(np.random.uniform(-10.0, 10.0))
         sig_var = float(np.random.uniform(-10.0, 10.0))
         noise = "low"
-        antenna_offset = -0.50
-        coupling_thickness = 0.020
     else:  # N3_measurement_variation
         eps_var = float(np.random.uniform(-5.0, 5.0))
         sig_var = float(np.random.uniform(-5.0, 5.0))
         noise = "medium"
-        antenna_offset = float(np.random.uniform(-0.75, -0.25))
-        coupling_thickness = float(np.random.uniform(0.01, 0.03))
+
+    head_scale = float(np.random.uniform(0.9, 1.1))
+    head_rotation_deg = float(np.random.uniform(-15.0, 15.0))
 
     return {
         "scenario_id": scenario_id,
@@ -133,8 +124,8 @@ def make_no_anomaly_sample(scenario_id, group_name):
         "lesion_z": 0.0,
         "epsilon_variation": round(eps_var, 4),
         "sigma_variation": round(sig_var, 4),
-        "antenna_offset": round(antenna_offset, 4),
-        "coupling_thickness": round(coupling_thickness, 4),
+        "head_scale": round(head_scale, 4),
+        "head_rotation_deg": round(head_rotation_deg, 4),
         "noise_level": noise,
         "split": assign_split(scenario_id),
         "group": group_name,
@@ -216,8 +207,8 @@ def make_anomaly_sample(scenario_id, anomaly_index, plan_item, noise_level):
     bg_eps_var = float(np.random.uniform(-10.0, 10.0))
     bg_sig_var = float(np.random.uniform(-10.0, 10.0))
 
-    cycle_idx = anomaly_index % len(ANOMALY_MEASUREMENT_CYCLE)
-    antenna_offset, coupling_thickness = ANOMALY_MEASUREMENT_CYCLE[cycle_idx]
+    head_scale = float(np.random.uniform(0.9, 1.1))
+    head_rotation_deg = float(np.random.uniform(-15.0, 15.0))
 
     return {
         "scenario_id": scenario_id,
@@ -228,8 +219,8 @@ def make_anomaly_sample(scenario_id, anomaly_index, plan_item, noise_level):
         "lesion_z": lesion_z,
         "epsilon_variation": round(bg_eps_var, 4),
         "sigma_variation": round(bg_sig_var, 4),
-        "antenna_offset": round(antenna_offset, 4),
-        "coupling_thickness": round(coupling_thickness, 4),
+        "head_scale": round(head_scale, 4),
+        "head_rotation_deg": round(head_rotation_deg, 4),
         "noise_level": noise_level,
         "split": assign_split(scenario_id),
         "group": "A_anomaly",

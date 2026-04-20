@@ -5,8 +5,9 @@ Each metadata row (scenario) produces 16 input files:
   brain_inputs/scenario_XXX_tx01.in ... scenario_XXX_tx16.in
 
 This script makes simulation generation metadata-driven, so the physics setup
-(lesion presence/size/position, property variation, antenna offset, coupling
-thickness) is read per scenario from dataset_metadata.csv.
+(lesion presence/size/position, property variation, head scale, head rotation)
+is read per scenario from dataset_metadata.csv. Coupling thickness is fixed at
+0.02 m and antenna offset is fixed at -0.5 cells.
 """
 
 import argparse
@@ -122,9 +123,27 @@ def write_lesion(f, row):
         return
 
     lesion_size_m = parse_float(row, "lesion_size_mm", 0.0) / 1000.0
-    lx = HEAD_CENTER[0] + parse_float(row, "lesion_x", 0.0)
-    ly = HEAD_CENTER[1] + parse_float(row, "lesion_y", 0.0)
-    lz = HEAD_CENTER[2] + parse_float(row, "lesion_z", 0.0)
+    head_scale = parse_float(row, "head_scale", 1.0)
+    if head_scale <= 0:
+        head_scale = 1.0
+
+    head_rotation_deg = parse_float(row, "head_rotation_deg", 0.0)
+    theta = np.deg2rad(head_rotation_deg)
+    cos_t = np.cos(theta)
+    sin_t = np.sin(theta)
+
+    # Scale lesion offsets with the head, then rotate around z-axis.
+    local_x = parse_float(row, "lesion_x", 0.0) * head_scale
+    local_y = parse_float(row, "lesion_y", 0.0) * head_scale
+    local_z = parse_float(row, "lesion_z", 0.0) * head_scale
+
+    world_x = cos_t * local_x - sin_t * local_y
+    world_y = sin_t * local_x + cos_t * local_y
+    world_z = local_z
+
+    lx = HEAD_CENTER[0] + world_x
+    ly = HEAD_CENTER[1] + world_y
+    lz = HEAD_CENTER[2] + world_z
     shape = str(row.get("shape", "sphere")).strip().lower()
 
     if shape == "ellipsoid":
@@ -155,11 +174,14 @@ def write_scenario(row, output_dir):
     noise_level = str(row.get("noise_level", "low")).strip() or "low"
     group_name = str(row.get("group", "unknown")).strip() or "unknown"
 
-    coupling_thickness = parse_float(row, "coupling_thickness", DEFAULT_COUPLING_THICKNESS)
-    if coupling_thickness <= 0:
-        coupling_thickness = DEFAULT_COUPLING_THICKNESS
+    coupling_thickness = DEFAULT_COUPLING_THICKNESS
+    antenna_offset_cells = DEFAULT_ANTENNA_OFFSET_CELLS
 
-    antenna_offset_cells = parse_float(row, "antenna_offset", DEFAULT_ANTENNA_OFFSET_CELLS)
+    head_scale = parse_float(row, "head_scale", 1.0)
+    if head_scale <= 0:
+        head_scale = 1.0
+    head_rotation_deg = parse_float(row, "head_rotation_deg", 0.0)
+
     materials = build_materials(row)
 
     for src_idx in range(N_ANTENNAS):
@@ -198,38 +220,57 @@ def write_scenario(row, output_dir):
             f.write(f"scalp_thickness = {SCALP_SKULL_THICKNESS}\n")
             f.write(f"gray_thickness = {GRAY_MATTER_THICKNESS}\n")
             f.write(f"coupling_thickness = {coupling_thickness}\n")
+            f.write(f"head_scale = {head_scale:.6f}\n")
+            f.write(f"theta_deg = {head_rotation_deg:.6f}\n")
             f.write("geo_res = 0.004\n\n")
-            f.write("def in_ellipsoid(x, y, z, center, a, b, c):\n")
-            f.write("    dx, dy, dz = (x-center[0])/a, (y-center[1])/b, (z-center[2])/c\n")
+            f.write("theta = np.deg2rad(theta_deg)\n")
+            f.write("cos_t = np.cos(theta)\n")
+            f.write("sin_t = np.sin(theta)\n\n")
+            f.write("def to_head_frame(x, y, z):\n")
+            f.write("    dx = x - head_center[0]\n")
+            f.write("    dy = y - head_center[1]\n")
+            f.write("    dz = z - head_center[2]\n")
+            f.write("    xr = cos_t * dx + sin_t * dy\n")
+            f.write("    yr = -sin_t * dx + cos_t * dy\n")
+            f.write("    return xr / head_scale, yr / head_scale, dz / head_scale\n\n")
+            f.write("def in_ellipsoid_local(x, y, z, a, b, c, cx=0.0, cy=0.0, cz=0.0):\n")
+            f.write("    dx, dy, dz = (x-cx)/a, (y-cy)/b, (z-cz)/c\n")
             f.write("    return (dx*dx + dy*dy + dz*dz) <= 1.0\n\n")
-            f.write("x_min = head_center[0] - (a + scalp_thickness + coupling_thickness + 0.01)\n")
-            f.write("x_max = head_center[0] + (a + scalp_thickness + coupling_thickness + 0.01)\n")
-            f.write("y_min = head_center[1] - (b + scalp_thickness + coupling_thickness + 0.01)\n")
-            f.write("y_max = head_center[1] + (b + scalp_thickness + coupling_thickness + 0.01)\n")
-            f.write("z_min = head_center[2] - (c + scalp_thickness + coupling_thickness + 0.01)\n")
-            f.write("z_max = head_center[2] + (c + scalp_thickness + coupling_thickness + 0.01)\n\n")
+            f.write("outer_a = (a + scalp_thickness + coupling_thickness) * head_scale\n")
+            f.write("outer_b = (b + scalp_thickness + coupling_thickness) * head_scale\n")
+            f.write("outer_c = (c + scalp_thickness + coupling_thickness) * head_scale\n")
+            f.write("r_xy = max(outer_a, outer_b) + 0.01\n")
+            f.write("r_z = outer_c + 0.01\n")
+            f.write("x_min = head_center[0] - r_xy\n")
+            f.write("x_max = head_center[0] + r_xy\n")
+            f.write("y_min = head_center[1] - r_xy\n")
+            f.write("y_max = head_center[1] + r_xy\n")
+            f.write("z_min = head_center[2] - r_z\n")
+            f.write("z_max = head_center[2] + r_z\n\n")
             f.write("for x in np.arange(x_min, x_max, geo_res):\n")
             f.write("    for y in np.arange(y_min, y_max, geo_res):\n")
             f.write("        for z in np.arange(z_min, z_max, geo_res):\n")
-            f.write("            if in_ellipsoid(x, y, z, head_center, a+scalp_thickness+coupling_thickness, b+scalp_thickness+coupling_thickness, c+scalp_thickness+coupling_thickness):\n")
+            f.write("            xh, yh, zh = to_head_frame(x, y, z)\n")
+            f.write("            if in_ellipsoid_local(xh, yh, zh, a+scalp_thickness+coupling_thickness, b+scalp_thickness+coupling_thickness, c+scalp_thickness+coupling_thickness):\n")
             f.write("                material = 'coupling_medium'\n")
-            f.write("                if in_ellipsoid(x, y, z, head_center, a+scalp_thickness, b+scalp_thickness, c+scalp_thickness):\n")
+            f.write("                if in_ellipsoid_local(xh, yh, zh, a+scalp_thickness, b+scalp_thickness, c+scalp_thickness):\n")
             f.write("                    material = 'scalp_skull'\n")
-            f.write("                    if in_ellipsoid(x, y, z, head_center, a, b, c):\n")
+            f.write("                    if in_ellipsoid_local(xh, yh, zh, a, b, c):\n")
             f.write("                        material = 'gray_matter'\n")
-            f.write("                        if in_ellipsoid(x, y, z, head_center, a-gray_thickness, b-gray_thickness, c-gray_thickness):\n")
+            f.write("                        if in_ellipsoid_local(xh, yh, zh, a-gray_thickness, b-gray_thickness, c-gray_thickness):\n")
             f.write("                            material = 'white_matter'\n")
             f.write("                print(f'#box: {x} {y} {z} {x+geo_res} {y+geo_res} {z+geo_res} {material}')\n")
             f.write("#end_python:\n\n")
 
             f.write("## CSF Ventricles\n#python:\n")
             f.write("vent_a, vent_b, vent_c = 0.020, 0.010, 0.040\n")
-            f.write("vent_left = np.array([head_center[0]-0.0075, head_center[1], head_center[2]])\n")
-            f.write("vent_right = np.array([head_center[0]+0.0075, head_center[1], head_center[2]])\n")
-            f.write("for x in np.arange(head_center[0]-0.035, head_center[0]+0.035, geo_res):\n")
-            f.write("    for y in np.arange(head_center[1]-0.015, head_center[1]+0.015, geo_res):\n")
-            f.write("        for z in np.arange(head_center[2]-0.045, head_center[2]+0.045, geo_res):\n")
-            f.write("            if in_ellipsoid(x,y,z,vent_left,vent_a,vent_b,vent_c) or in_ellipsoid(x,y,z,vent_right,vent_a,vent_b,vent_c):\n")
+            f.write("vent_left_local = np.array([-0.0075, 0.0, 0.0])\n")
+            f.write("vent_right_local = np.array([0.0075, 0.0, 0.0])\n")
+            f.write("for x in np.arange(head_center[0]-0.035*head_scale, head_center[0]+0.035*head_scale, geo_res):\n")
+            f.write("    for y in np.arange(head_center[1]-0.015*head_scale, head_center[1]+0.015*head_scale, geo_res):\n")
+            f.write("        for z in np.arange(head_center[2]-0.045*head_scale, head_center[2]+0.045*head_scale, geo_res):\n")
+            f.write("            xh, yh, zh = to_head_frame(x, y, z)\n")
+            f.write("            if in_ellipsoid_local(xh, yh, zh, vent_a, vent_b, vent_c, vent_left_local[0], vent_left_local[1], vent_left_local[2]) or in_ellipsoid_local(xh, yh, zh, vent_a, vent_b, vent_c, vent_right_local[0], vent_right_local[1], vent_right_local[2]):\n")
             f.write("                print(f'#box: {x} {y} {z} {x+geo_res} {y+geo_res} {z+geo_res} csf')\n")
             f.write("#end_python:\n\n")
 

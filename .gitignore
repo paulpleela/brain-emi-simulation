@@ -35,6 +35,8 @@ build/
 /brain_monopole_simulations/
 /logs/
 /sparams_time/
+/deep_learning/
+/old_fd_tensors/
 
 # Large data
 *.zip
