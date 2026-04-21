@@ -36,6 +36,8 @@
 #   USE_GPU        (0/1, default 1)
 #   DELETE_OUT     (0/1, default 1)
 #   DELETE_IN      (0/1, default 1)
+#   RUN_BUILD_FD   (0/1, default 1)
+#   RUN_FIT_STATS  (0/1, default RUN_BUILD_FD)
 
 set -euo pipefail
 
@@ -44,6 +46,8 @@ END_SCENARIO="${END_SCENARIO:-$START_SCENARIO}"
 USE_GPU="${USE_GPU:-1}"
 DELETE_OUT="${DELETE_OUT:-1}"
 DELETE_IN="${DELETE_IN:-1}"
+RUN_BUILD_FD="${RUN_BUILD_FD:-1}"
+RUN_FIT_STATS="${RUN_FIT_STATS:-$RUN_BUILD_FD}"
 CONDA_ENV_NAME="${CONDA_ENV_NAME:-gprmax}"
 
 if [[ "$START_SCENARIO" -gt "$END_SCENARIO" ]]; then
@@ -56,6 +60,7 @@ echo "gprMax Sequential Scenario Runner"
 echo "Node: ${SLURM_NODELIST:-local}"
 echo "Scenario range: ${START_SCENARIO}..${END_SCENARIO}"
 echo "USE_GPU=${USE_GPU} DELETE_IN=${DELETE_IN} DELETE_OUT=${DELETE_OUT}"
+echo "RUN_BUILD_FD=${RUN_BUILD_FD} RUN_FIT_STATS=${RUN_FIT_STATS}"
 echo "Start time: $(date)"
 echo "========================================"
 
@@ -109,8 +114,10 @@ for sid in $(seq "$START_SCENARIO" "$END_SCENARIO"); do
   # 3) Extract S-parameters
   "$PYTHON" build_s16p.py --scenario "$sid" --no-delete
 
-  # 4) Build this scenario's FD tensor immediately.
-  "$PYTHON" build_fd_tensors.py --scenario "$sid"
+  # 4) Build this scenario's FD tensor immediately (optional).
+  if [[ "$RUN_BUILD_FD" == "1" ]]; then
+    "$PYTHON" build_fd_tensors.py --scenario "$sid"
+  fi
 
   # 5) Delete intermediate files for this scenario
   if [[ "$DELETE_IN" == "1" ]]; then
@@ -124,8 +131,10 @@ for sid in $(seq "$START_SCENARIO" "$END_SCENARIO"); do
   echo "Scenario ${sid_pad} complete"
 done
 
-# Refresh train-only normalization stats after the range finishes.
-"$PYTHON" build_fd_tensors.py --fit-stats --fit-only
+if [[ "$RUN_FIT_STATS" == "1" ]]; then
+  # Refresh train-only normalization stats after the range finishes.
+  "$PYTHON" build_fd_tensors.py --fit-stats --fit-only
+fi
 
 echo ""
 echo "========================================"

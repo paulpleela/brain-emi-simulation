@@ -95,13 +95,18 @@ sbatch run_simulation_gpu.sh
 ```
 
 Notes:
-- The script is configured for `a100` with `--gres=gpu:1`.
-- It uses the same sequential low-storage pipeline as CPU, but runs gprMax with `-gpu`.
-- Override scenario range:
+- The script now submits a GPU scenario array: one scenario per GPU job.
+- Each scenario job runs all 16 TX sequentially, then builds `.s16p` and cleans intermediates.
+- A dependent CPU post job builds FD tensors and refreshes normalization stats for the selected range.
+- Override scenario range and concurrency:
 
 ```bash
-sbatch --export=ALL,START_SCENARIO=1,END_SCENARIO=20 run_simulation_gpu.sh
+sbatch --export=ALL,START_SCENARIO=1,END_SCENARIO=20,MAX_CONCURRENT_SCENARIOS=8 run_simulation_gpu.sh
 ```
+
+Optional GPU tunables:
+- `GPU_CPUS_PER_TASK` (default `8`)
+- `GPU_TIME_LIMIT` (default `24:00:00`)
 
 ### Sequential core script
 
