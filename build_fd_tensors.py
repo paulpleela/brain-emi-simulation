@@ -32,6 +32,12 @@ DEFAULT_METADATA_FILE = "dataset_metadata.csv"
 DEFAULT_STATS_FILE = "normalization_freq_full.npz"
 N_PORTS = 16
 EPSILON = 1e-8
+NOISE_STD_MAP = {
+    "none": 0.0,
+    "low": 0.001,
+    "medium": 0.005,
+    "high": 0.01,
+}
 
 
 def parse_scenario_id(path: str) -> int:
@@ -181,12 +187,72 @@ def read_split_map(metadata_path: str) -> Dict[int, str]:
     return split_map
 
 
-def fit_normalization_stats(train_paths: List[str]) -> Tuple[np.ndarray, np.ndarray]:
+def read_noise_level_map(metadata_path: str) -> Dict[int, str]:
+    if not os.path.isfile(metadata_path):
+        raise FileNotFoundError(f"Metadata file not found: {metadata_path}")
+
+    noise_map: Dict[int, str] = {}
+    with open(metadata_path, "r", newline="") as f:
+        reader = csv.DictReader(f)
+        if not reader.fieldnames or "scenario_id" not in reader.fieldnames:
+            raise ValueError("Metadata must include 'scenario_id' column")
+
+        for row in reader:
+            sid_raw = (row.get("scenario_id") or "").strip()
+            if not sid_raw:
+                continue
+            try:
+                sid = int(sid_raw)
+            except ValueError:
+                continue
+            noise_level = (row.get("noise_level") or "low").strip().lower()
+            noise_map[sid] = noise_level if noise_level in NOISE_STD_MAP else "low"
+
+    return noise_map
+
+
+def apply_measurement_noise(
+    signal: np.ndarray,
+    noise_level: str,
+    scenario_id: int,
+    noise_seed: int | None,
+) -> np.ndarray:
+    noise_scale = NOISE_STD_MAP.get(noise_level, NOISE_STD_MAP["low"])
+    if noise_scale <= 0:
+        return signal.astype(np.float32, copy=False)
+
+    seed = scenario_id if noise_seed is None else (noise_seed + scenario_id)
+    rng = np.random.default_rng(seed)
+
+    out = signal.astype(np.float32, copy=True)
+    real_ch = out[0::2, :]
+    imag_ch = out[1::2, :]
+
+    real_std = np.std(real_ch, axis=1, ddof=0, keepdims=True).astype(np.float32)
+    imag_std = np.std(imag_ch, axis=1, ddof=0, keepdims=True).astype(np.float32)
+    real_sigma = np.maximum(real_std * noise_scale, EPSILON)
+    imag_sigma = np.maximum(imag_std * noise_scale, EPSILON)
+
+    noise_real = rng.normal(0.0, 1.0, size=real_ch.shape).astype(np.float32) * real_sigma
+    noise_imag = rng.normal(0.0, 1.0, size=imag_ch.shape).astype(np.float32) * imag_sigma
+    out[0::2, :] += noise_real
+    out[1::2, :] += noise_imag
+    return out
+
+
+def fit_normalization_stats(
+    train_paths: List[str],
+    noise_level_map: Dict[int, str],
+    noise_seed: int | None,
+) -> Tuple[np.ndarray, np.ndarray]:
     stats = RunningStats2D()
     for path in train_paths:
+        sid = parse_scenario_id(path)
         _, S = load_s16p(path, n_ports=N_PORTS)
         full = extract_full_smatrix(S)
         signal = build_frequency_tensor(full)
+        noise_level = noise_level_map.get(sid, "low")
+        signal = apply_measurement_noise(signal, noise_level, sid, noise_seed)
         stats.update(signal)
     return stats.finalize()
 
@@ -236,6 +302,7 @@ def main() -> None:
     parser.add_argument("--metadata", default=DEFAULT_METADATA_FILE)
     parser.add_argument("--fit-stats", action="store_true", help="Fit train-only normalization stats before applying")
     parser.add_argument("--fit-only", action="store_true", help="Fit and save stats, then exit without writing scenario tensors")
+    parser.add_argument("--noise-seed", type=int, default=None, help="Optional base seed for deterministic measurement noise")
     args = parser.parse_args()
 
     files = select_files(args.input_dir, args.scenario, args.all, tuple(args.range) if args.range else None)
@@ -245,6 +312,7 @@ def main() -> None:
 
     channels = build_channel_names()
     stats_path = os.path.join(args.output_dir, DEFAULT_STATS_FILE)
+    noise_level_map = read_noise_level_map(args.metadata)
 
     if args.fit_stats or not os.path.isfile(stats_path):
         split_map = read_split_map(args.metadata)
@@ -259,7 +327,7 @@ def main() -> None:
         if not train_paths:
             raise ValueError("No train .s16p files found to fit normalization stats")
 
-        mean, std = fit_normalization_stats(train_paths)
+        mean, std = fit_normalization_stats(train_paths, noise_level_map, args.noise_seed)
         save_normalization_stats(stats_path, mean, std, channels)
         print(f"Saved train-only normalization stats: {stats_path} | train files: {len(train_paths)}")
 
@@ -280,6 +348,8 @@ def main() -> None:
             _, S = load_s16p(path, n_ports=N_PORTS)
             full = extract_full_smatrix(S)
             signal = build_frequency_tensor(full)
+            noise_level = noise_level_map.get(sid, "low")
+            signal = apply_measurement_noise(signal, noise_level, sid, args.noise_seed)
             signal = apply_normalization(signal, mean, std)
 
             if signal.shape[0] != 2 * N_PORTS * N_PORTS:

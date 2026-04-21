@@ -19,10 +19,19 @@ conda run -n brain-emi-simulation python generate_metadata.py
 
 This writes [dataset_metadata.csv](dataset_metadata.csv) with:
 - `scenario_id` (1..1000)
-- anomaly labels and lesion geometry
-- property variation fields
-- measurement variation fields
-- deterministic split assignment
+- deterministic shuffled split assignment (train=700, val=150, test=150)
+- label field (`has_lesion`) with balanced split composition (30% healthy, 70% anomaly per split)
+- lesion geometry and tissue variation fields
+- primary analysis variables:
+  - `head_scale` in [0.9, 1.1]
+  - `head_rotation_deg` in [-15, 15]
+  - `noise_level` in {none, low, medium, high}
+- base-case marker `is_base_case` (scenario 1 is fixed baseline)
+
+Base case policy:
+- Scenario 1 is the controlled baseline: healthy, `head_scale=1.0`, `head_rotation_deg=0.0`, `noise_level=none`.
+- All other scenarios use low/medium/high noise schedules for robustness analysis.
+- Healthy groups are `N1_baseline`, `N2_property_variation`, and `N3_noise_variation`.
 
 ### 2) Generate simulation inputs from metadata (optional/manual)
 
@@ -165,6 +174,10 @@ ML tensor format (fixed):
 - NPZ keys: `signal`, `channels`
 - Full S-matrix channels only (`S11..S1616`, real/imag pairs)
 - `signal` shape: `(512, F)` for 16-port setup
+- Measurement noise is injected after `.s16p -> tensor` conversion using metadata `noise_level`:
+  - Gaussian perturbation is added independently to real/imag channels
+  - per-channel std is scaled from that channel's signal std
+  - scale factors: `none=0.0`, `low=0.001`, `medium=0.005`, `high=0.01`
 - Normalization: train-split fit only, reused for train/val/test
 - Global stats file: `fd_tensors/normalization_freq_full.npz`
 
