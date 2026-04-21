@@ -36,7 +36,9 @@ BASE_MATERIALS = {
 }
 
 DEFAULT_COUPLING_THICKNESS = 0.020
-DEFAULT_ANTENNA_OFFSET_CELLS = -0.50
+# Antenna ring is fixed across all scenarios.
+FIXED_ANTENNA_RADIUS_X = 0.124
+FIXED_ANTENNA_RADIUS_Y = 0.104
 
 DIPOLE_ARM_LEN = float(os.getenv("DIPOLE_ARM_LEN_M", "0.056"))
 DIPOLE_GAP = float(os.getenv("DIPOLE_GAP_M", "0.002"))
@@ -175,8 +177,6 @@ def write_scenario(row, output_dir):
     group_name = str(row.get("group", "unknown")).strip() or "unknown"
 
     coupling_thickness = DEFAULT_COUPLING_THICKNESS
-    antenna_offset_cells = DEFAULT_ANTENNA_OFFSET_CELLS
-
     head_scale = parse_float(row, "head_scale", 1.0)
     if head_scale <= 0:
         head_scale = 1.0
@@ -226,6 +226,11 @@ def write_scenario(row, output_dir):
             f.write("theta = np.deg2rad(theta_deg)\n")
             f.write("cos_t = np.cos(theta)\n")
             f.write("sin_t = np.sin(theta)\n\n")
+            f.write("def in_ellipsoid_world(x, y, z, a, b, c):\n")
+            f.write("    dx = (x-head_center[0]) / a\n")
+            f.write("    dy = (y-head_center[1]) / b\n")
+            f.write("    dz = (z-head_center[2]) / c\n")
+            f.write("    return (dx*dx + dy*dy + dz*dz) <= 1.0\n\n")
             f.write("def to_head_frame(x, y, z):\n")
             f.write("    dx = x - head_center[0]\n")
             f.write("    dy = y - head_center[1]\n")
@@ -236,9 +241,9 @@ def write_scenario(row, output_dir):
             f.write("def in_ellipsoid_local(x, y, z, a, b, c, cx=0.0, cy=0.0, cz=0.0):\n")
             f.write("    dx, dy, dz = (x-cx)/a, (y-cy)/b, (z-cz)/c\n")
             f.write("    return (dx*dx + dy*dy + dz*dz) <= 1.0\n\n")
-            f.write("outer_a = (a + scalp_thickness + coupling_thickness) * head_scale\n")
-            f.write("outer_b = (b + scalp_thickness + coupling_thickness) * head_scale\n")
-            f.write("outer_c = (c + scalp_thickness + coupling_thickness) * head_scale\n")
+            f.write("outer_a = a + scalp_thickness + coupling_thickness\n")
+            f.write("outer_b = b + scalp_thickness + coupling_thickness\n")
+            f.write("outer_c = c + scalp_thickness + coupling_thickness\n")
             f.write("r_xy = max(outer_a, outer_b) + 0.01\n")
             f.write("r_z = outer_c + 0.01\n")
             f.write("x_min = head_center[0] - r_xy\n")
@@ -250,9 +255,9 @@ def write_scenario(row, output_dir):
             f.write("for x in np.arange(x_min, x_max, geo_res):\n")
             f.write("    for y in np.arange(y_min, y_max, geo_res):\n")
             f.write("        for z in np.arange(z_min, z_max, geo_res):\n")
-            f.write("            xh, yh, zh = to_head_frame(x, y, z)\n")
-            f.write("            if in_ellipsoid_local(xh, yh, zh, a+scalp_thickness+coupling_thickness, b+scalp_thickness+coupling_thickness, c+scalp_thickness+coupling_thickness):\n")
+            f.write("            if in_ellipsoid_world(x, y, z, outer_a, outer_b, outer_c):\n")
             f.write("                material = 'coupling_medium'\n")
+            f.write("                xh, yh, zh = to_head_frame(x, y, z)\n")
             f.write("                if in_ellipsoid_local(xh, yh, zh, a+scalp_thickness, b+scalp_thickness, c+scalp_thickness):\n")
             f.write("                    material = 'scalp_skull'\n")
             f.write("                    if in_ellipsoid_local(xh, yh, zh, a, b, c):\n")
@@ -289,9 +294,8 @@ def write_scenario(row, output_dir):
             f.write(f"head_center        = ({HEAD_CENTER[0]}, {HEAD_CENTER[1]}, {HEAD_CENTER[2]})\n")
             f.write(f"a                  = {HEAD_SEMI_AXES['a']}\n")
             f.write(f"b                  = {HEAD_SEMI_AXES['b']}\n")
-            f.write(f"scalp_thickness    = {SCALP_SKULL_THICKNESS}\n")
-            f.write(f"coupling_thickness = {coupling_thickness}\n")
-            f.write(f"antenna_offset_cells = {antenna_offset_cells}\n")
+            f.write(f"r_x                = {FIXED_ANTENNA_RADIUS_X:.6f}\n")
+            f.write(f"r_y                = {FIXED_ANTENNA_RADIUS_Y:.6f}\n")
             f.write(f"arm                = {DIPOLE_ARM_LEN}\n")
             f.write(f"gap                = {DIPOLE_GAP}\n")
             f.write("antennas = []\n")
@@ -299,8 +303,6 @@ def write_scenario(row, output_dir):
             f.write("    angle = 2 * math.pi * i / n_antennas\n")
             f.write("    cos_a = math.cos(angle)\n")
             f.write("    sin_a = math.sin(angle)\n")
-            f.write("    r_x = a + scalp_thickness + coupling_thickness + antenna_offset_cells * cell\n")
-            f.write("    r_y = b + scalp_thickness + coupling_thickness + antenna_offset_cells * cell\n")
             f.write("    cx = round((head_center[0] + r_x * cos_a) / cell) * cell\n")
             f.write("    cy = round((head_center[1] + r_y * sin_a) / cell) * cell\n")
             f.write("    cz = head_center[2]\n")

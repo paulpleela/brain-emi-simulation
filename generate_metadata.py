@@ -38,6 +38,10 @@ HEALTHY_COUNTS = {
 
 REGIONS = ["left", "right", "deep", "boundary"]
 HEALTHY_GROUPS = ["N1_baseline", "N2_property_variation", "N3_noise_variation"]
+HEAD_A = 0.095
+HEAD_B = 0.075
+BOUNDARY_FRAC_MIN = 0.85
+BOUNDARY_FRAC_MAX = 0.95
 SIZE_BUCKETS = [
     ("small", 230, 5.0, 10.0),
     ("medium", 240, 10.0, 20.0),
@@ -116,15 +120,18 @@ def random_position_by_region(region):
         y = np.random.uniform(-0.030, 0.030)
         z = np.random.uniform(-0.070, 0.070)
     elif region == "deep":
-        x = np.random.uniform(-0.012, 0.012)
-        y = np.random.uniform(-0.012, 0.012)
+        x = np.random.uniform(-0.020, 0.020)
+        y = np.random.uniform(-0.020, 0.020)
         z = np.random.uniform(-0.050, 0.050)
     else:  # boundary
         theta = np.random.uniform(0, 2 * math.pi)
-        r = np.random.uniform(0.040, 0.055)
+        # Sample near the elliptical skull boundary (not mid-brain).
+        frac = np.random.uniform(BOUNDARY_FRAC_MIN, BOUNDARY_FRAC_MAX)
+        edge_r = 1.0 / math.sqrt((math.cos(theta) ** 2) / (HEAD_A ** 2) + (math.sin(theta) ** 2) / (HEAD_B ** 2))
+        r = frac * edge_r
         x = r * math.cos(theta)
         y = r * math.sin(theta)
-        z = np.random.uniform(-0.080, 0.080)
+        z = np.random.uniform(-0.060, 0.060)
 
     return float(round(x, 6)), float(round(y, 6)), float(round(z, 6))
 
