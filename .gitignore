@@ -35,14 +35,19 @@ build/
 /brain_monopole_simulations/
 /logs/
 /sparams_time/
-/deep_learning/
 /old_fd_tensors/
+/fd_tensors/
+/datasets/
 
 # Large data
 *.zip
 *.tar.gz
+/deep_learning/outputs/
+/deep_learning/plots/
 
 # OS files
 .DS_Store
 Thumbs.db
 desktop.ini
+
+/ARCHIVE/

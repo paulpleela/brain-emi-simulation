@@ -1,0 +1,26 @@
+{
+  "real_imag": {
+    "description": "Real & Imaginary components [Re(S), Im(S)]",
+    "train_auc_final": 0.5694266277939748,
+    "val_auc_final": 0.5985185185185184,
+    "val_auc_best": 0.6888888888888889,
+    "best_epoch": 24,
+    "input_size": 46080
+  },
+  "mag_phase": {
+    "description": "Magnitude + Phase [|S|, cos(\u03b8), sin(\u03b8)]",
+    "train_auc_final": 0.7332458697764821,
+    "val_auc_final": 0.7068783068783069,
+    "val_auc_best": 0.7498412698412698,
+    "best_epoch": 17,
+    "input_size": 69120
+  },
+  "mag_only": {
+    "description": "Magnitude only [|S|]",
+    "train_auc_final": 0.515636540330418,
+    "val_auc_final": 0.5185185185185186,
+    "val_auc_best": 0.5466666666666666,
+    "best_epoch": 18,
+    "input_size": 23040
+  }
+}
