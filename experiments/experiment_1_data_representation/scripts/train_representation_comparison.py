@@ -18,6 +18,7 @@ from sklearn.metrics import roc_auc_score
 import matplotlib.pyplot as plt
 from pathlib import Path
 import json
+from matplotlib.ticker import MaxNLocator
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}\n")
@@ -119,93 +120,146 @@ for fmt_name, fmt_desc in formats.items():
     print(f"\n{'=' * 70}")
     print(f"Testing: {fmt_desc}")
     print(f"{'=' * 70}")
-    
-    # Load normalized data
-    dataset_path = DATASET_DIR / f"dataset_{fmt_name}_normalized.npz"
-    if not dataset_path.exists():
-        print(f"⚠️  Dataset not found: {dataset_path}")
+
+    # Load dataset (raw preferred) and normalize with train-only stats
+    raw_path = DATASET_DIR / f"dataset_{fmt_name}.npz"
+    normalized_path = DATASET_DIR / f"dataset_{fmt_name}_normalized.npz"
+    if raw_path.exists():
+        data = np.load(raw_path)
+    elif normalized_path.exists():
+        data = np.load(normalized_path)
+    else:
+        print(f"⚠️  Dataset not found: {raw_path} or {normalized_path}")
         print(f"Please run: python -m experiments.experiment_1_data_representation.scripts.generate_classification_datasets")
         continue
-    
-    data = np.load(dataset_path)
-    X_train = data['X_train']
-    y_train = data['y_train']
-    X_val = data['X_val']
-    y_val = data['y_val']
-    
-    # Flatten from (N, 90, 16, 16, C) to (N, 90*16*16*C)
-    input_size = np.prod(X_train.shape[1:])
-    X_train_flat = X_train.reshape(X_train.shape[0], -1).astype(np.float32)
-    X_val_flat = X_val.reshape(X_val.shape[0], -1).astype(np.float32)
-    
-    y_train_t = torch.from_numpy(y_train.astype(np.float32))
-    y_val_t = torch.from_numpy(y_val.astype(np.float32))
-    
-    X_train_t = torch.from_numpy(X_train_flat)
-    X_val_t = torch.from_numpy(X_val_flat)
-    
-    # Data loaders
-    train_loader = DataLoader(
-        TensorDataset(X_train_t, y_train_t),
-        batch_size=32, shuffle=True
-    )
-    val_loader = DataLoader(
-        TensorDataset(X_val_t, y_val_t),
-        batch_size=32, shuffle=False
-    )
-    
-    print(f"  Dataset: {X_train.shape} → {X_train_flat.shape} (flattened)")
-    print(f"  Input size: {input_size:,} features")
-    print(f"  Class balance: Train {y_train.mean():.1%}, Val {y_val.mean():.1%}")
-    print(f"  Baseline (logistic): 0.69-0.71 AUC")
-    print()
-    
-    # Build model
-    model = SimpleMLPClassifier(input_size)
-    model = model.to(device)
-    optimizer = Adam(model.parameters(), lr=1e-3)
-    criterion = nn.BCEWithLogitsLoss()
-    
-    # Training
-    train_losses, train_aucs = [], []
-    val_losses, val_aucs = [], []
-    best_val_auc = 0
-    best_epoch = 0
-    
-    print(f"  Training for 30 epochs...")
-    for epoch in range(1, 31):
-        train_loss, train_auc = train_epoch(model, train_loader, optimizer, criterion, device)
-        val_loss, val_auc = evaluate(model, val_loader, criterion, device)
-        
-        train_losses.append(train_loss)
-        train_aucs.append(train_auc)
-        val_losses.append(val_loss)
-        val_aucs.append(val_auc)
-        
-        if val_auc > best_val_auc:
-            best_val_auc = val_auc
-            best_epoch = epoch
-        
-        if epoch % 6 == 0:
-            print(f"    Epoch {epoch:2d}/30: train_loss={train_loss:.4f} val_loss={val_loss:.4f} | train_auc={train_auc:.4f} val_auc={val_auc:.4f}")
-    
-    print()
-    print(f"  Final Results:")
-    print(f"    Train AUC: {train_aucs[-1]:.4f}")
-    print(f"    Val AUC:   {val_aucs[-1]:.4f} (best at epoch {best_epoch})")
-    print()
-    
+
+    X_train = data['X_train'].astype(np.float32)
+    y_train = data['y_train'].astype(np.float32)
+    X_val = data['X_val'].astype(np.float32)
+    y_val = data['y_val'].astype(np.float32)
+    X_test = data['X_test'].astype(np.float32) if 'X_test' in data.files else None
+    y_test = data['y_test'].astype(np.float32) if 'y_test' in data.files else None
+
+    mean = X_train.mean(axis=0, keepdims=True).astype(np.float32)
+    std = X_train.std(axis=0, keepdims=True).astype(np.float32)
+    std = np.maximum(std, 1e-6)
+
+    X_train = ((X_train - mean) / std).astype(np.float32)
+    X_val = ((X_val - mean) / std).astype(np.float32)
+    if X_test is not None:
+        X_test = ((X_test - mean) / std).astype(np.float32)
+
+    input_size = int(np.prod(X_train.shape[1:]))
+    print(f"  Dataset: {X_train.shape} → flattened features: {input_size:,}")
+    print(f"  Class balance: Train {float(y_train.mean()):.1%}, Val {float(y_val.mean()):.1%}")
+
+    # Training config: fixed 20-epoch schedule
+    max_epochs = 20
+    seeds = [42, 43, 44]
+
+    # Collect per-seed results
+    all_seed_results: dict[int, dict[str, object]] = {}
+
+    for seed in seeds:
+        print('-' * 70)
+        print(f"SEED: {seed}")
+        print('-' * 70)
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+
+        # Build loaders (recreate to ensure shuffle is seeded)
+        X_train_flat = X_train.reshape(X_train.shape[0], -1)
+        X_val_flat = X_val.reshape(X_val.shape[0], -1)
+        X_test_flat = X_test.reshape(X_test.shape[0], -1) if X_test is not None else None
+
+        train_loader = DataLoader(TensorDataset(torch.from_numpy(X_train_flat), torch.from_numpy(y_train)), batch_size=32, shuffle=True)
+        val_loader = DataLoader(TensorDataset(torch.from_numpy(X_val_flat), torch.from_numpy(y_val)), batch_size=32, shuffle=False)
+        test_loader = DataLoader(TensorDataset(torch.from_numpy(X_test_flat), torch.from_numpy(y_test)), batch_size=32, shuffle=False) if X_test_flat is not None else None
+
+        # Model per-seed
+        model = SimpleMLPClassifier(input_size).to(device)
+        optimizer = Adam(model.parameters(), lr=1e-3)
+        criterion = nn.BCEWithLogitsLoss()
+
+        train_losses: list[float] = []
+        val_losses: list[float] = []
+        train_aucs: list[float] = []
+        val_aucs: list[float] = []
+
+        best_val_auc = float('-inf')
+        best_epoch = 0
+        best_state = None
+
+        for epoch in range(1, max_epochs + 1):
+            model.train()
+            tloss, tauc = train_epoch(model, train_loader, optimizer, criterion, device)
+            vloss, vauc = evaluate(model, val_loader, criterion, device)
+
+            train_losses.append(tloss)
+            val_losses.append(vloss)
+            train_aucs.append(tauc)
+            val_aucs.append(vauc)
+
+            if vauc > best_val_auc + 1e-12:
+                best_val_auc = vauc
+                best_epoch = epoch
+                best_state = {k: v.cpu() for k, v in model.state_dict().items()}
+
+            if epoch % 5 == 0 or epoch == 1:
+                print(f"  Epoch {epoch:2d}/{max_epochs}: train_auc={tauc:.4f} val_auc={vauc:.4f}")
+
+        # Load best state and evaluate
+        if best_state is not None:
+            model.load_state_dict(best_state)
+
+        train_loss_best, train_auc_best = evaluate(model, train_loader, criterion, device)
+        val_loss_best, val_auc_best = evaluate(model, val_loader, criterion, device)
+        test_auc_best = None
+        test_loss_best = None
+        if test_loader is not None:
+            test_loss_best, test_auc_best = evaluate(model, test_loader, criterion, device)
+
+        # Save checkpoint
+        ckpt_path = RESULTS_DIR / f"{fmt_name}_best_seed{seed}.pt"
+        torch.save({"state_dict": model.state_dict(), "seed": seed, "epoch": best_epoch, "val_auc": best_val_auc}, ckpt_path)
+
+        all_seed_results[seed] = {
+            "param_count": sum(p.numel() for p in model.parameters() if p.requires_grad),
+            "train_losses": train_losses,
+            "val_losses": val_losses,
+            "train_aucs": train_aucs,
+            "val_aucs": val_aucs,
+            "train_auc_best": float(train_auc_best),
+            "val_auc_best": float(val_auc_best),
+            "best_epoch": int(best_epoch),
+            "test_auc_best": (float(test_auc_best) if test_auc_best is not None else None),
+            "best_checkpoint": str(ckpt_path),
+        }
+
+    # Aggregate across seeds
+    import statistics
+    test_vals = [all_seed_results[s]["test_auc_best"] for s in seeds if all_seed_results[s]["test_auc_best"] is not None]
+    test_vals = [float(x) for x in test_vals]
+    if len(test_vals) > 0:
+        mean_test = statistics.mean(test_vals)
+        std_test = statistics.pstdev(test_vals) if len(test_vals) > 1 else 0.0
+    else:
+        mean_test = float('nan')
+        std_test = float('nan')
+
+    # Save per-format JSON
+    out = {"per_seed": all_seed_results, "aggregate": {"test_auc_mean": mean_test, "test_auc_std": std_test}, "seeds": seeds}
+    results_path = RESULTS_DIR / f"experiment_1_{fmt_name}_results.json"
+    with results_path.open('w', encoding='utf-8') as fh:
+        json.dump(out, fh, indent=2)
+    print(f"✅ Results saved: {results_path}")
+
+    # Store a summary for plotting
     results[fmt_name] = {
         'description': fmt_desc,
-        'train_auc_final': float(train_aucs[-1]),
-        'val_auc_final': float(val_aucs[-1]),
-        'val_auc_best': float(best_val_auc),
-        'best_epoch': int(best_epoch),
-        'input_size': int(input_size),
-        'train_losses': train_losses,
-        'train_aucs': train_aucs,
-        'val_losses': val_losses,
-        'val_aucs': val_aucs,
+        'input_size': input_size,
+        'per_seed': all_seed_results,
+        'aggregate': out['aggregate'],
     }
 
 # ============================================================================
@@ -223,14 +277,35 @@ fig.suptitle(
     fontsize=14, fontweight='bold'
 )
 
+# Helper to build epoch-aligned matrix for a given metric
+def build_epoch_matrix_for_format(fmt: str, metric: str):
+    seeds_list = sorted(results[fmt]['per_seed'].keys())
+    mats = []
+    max_len = 0
+    for s in seeds_list:
+        seq = np.asarray(results[fmt]['per_seed'][s][metric], dtype=np.float32)
+        mats.append(seq)
+        if seq.shape[0] > max_len:
+            max_len = seq.shape[0]
+    mat = np.full((len(mats), max_len), np.nan, dtype=np.float32)
+    for i, arr in enumerate(mats):
+        mat[i, : arr.shape[0]] = arr
+    return mat
+
 # Training loss
 ax = axes[0, 0]
 for fmt_name in formats.keys():
     if fmt_name in results:
-        ax.plot(results[fmt_name]['train_losses'], label=fmt_name, linewidth=2, marker='o', markersize=3)
+        mat = build_epoch_matrix_for_format(fmt_name, 'train_losses')
+        mean = np.nanmean(mat, axis=0)
+        std = np.nanstd(mat, axis=0)
+        epochs = np.arange(1, mean.shape[0] + 1)
+        ax.plot(epochs, mean, label=fmt_name, linewidth=2)
+        ax.fill_between(epochs, mean - std, mean + std, alpha=0.15)
 ax.set_xlabel('Epoch')
 ax.set_ylabel('Training Loss')
-ax.set_title('Training Loss Over Time')
+ax.set_title('Training Loss (mean ± std across seeds)')
+ax.xaxis.set_major_locator(MaxNLocator(integer=True))
 ax.legend()
 ax.grid(True, alpha=0.3)
 
@@ -238,38 +313,52 @@ ax.grid(True, alpha=0.3)
 ax = axes[0, 1]
 for fmt_name in formats.keys():
     if fmt_name in results:
-        ax.plot(results[fmt_name]['val_losses'], label=fmt_name, linewidth=2, marker='o', markersize=3)
+        mat = build_epoch_matrix_for_format(fmt_name, 'val_losses')
+        mean = np.nanmean(mat, axis=0)
+        std = np.nanstd(mat, axis=0)
+        epochs = np.arange(1, mean.shape[0] + 1)
+        ax.plot(epochs, mean, label=fmt_name, linewidth=2)
+        ax.fill_between(epochs, mean - std, mean + std, alpha=0.15)
 ax.set_xlabel('Epoch')
 ax.set_ylabel('Validation Loss')
-ax.set_title('Validation Loss Over Time')
+ax.set_title('Validation Loss (mean ± std across seeds)')
+ax.xaxis.set_major_locator(MaxNLocator(integer=True))
 ax.legend()
 ax.grid(True, alpha=0.3)
 
 # Training AUC
 ax = axes[1, 0]
-ax.axhline(0.50, color='red', linestyle='--', linewidth=2, alpha=0.5, label='Random (0.50)')
-ax.axhline(0.70, color='green', linestyle='--', linewidth=2, alpha=0.5, label='Logistic Baseline (0.70)')
 for fmt_name in formats.keys():
     if fmt_name in results:
-        ax.plot(results[fmt_name]['train_aucs'], label=fmt_name, linewidth=2, marker='o', markersize=3)
+        mat = build_epoch_matrix_for_format(fmt_name, 'train_aucs')
+        mean = np.nanmean(mat, axis=0)
+        std = np.nanstd(mat, axis=0)
+        epochs = np.arange(1, mean.shape[0] + 1)
+        ax.plot(epochs, mean, label=fmt_name, linewidth=2)
+        ax.fill_between(epochs, mean - std, mean + std, alpha=0.15)
 ax.set_xlabel('Epoch')
 ax.set_ylabel('AUC')
-ax.set_title('Training AUC (Higher is Better)')
-ax.set_ylim([0.45, 0.80])
+ax.set_title('Training AUC (mean ± std across seeds)')
+ax.set_ylim([0.45, 0.90])
+ax.xaxis.set_major_locator(MaxNLocator(integer=True))
 ax.legend(loc='best')
 ax.grid(True, alpha=0.3)
 
 # Validation AUC
 ax = axes[1, 1]
-ax.axhline(0.50, color='red', linestyle='--', linewidth=2, alpha=0.5, label='Random (0.50)')
-ax.axhline(0.70, color='green', linestyle='--', linewidth=2, alpha=0.5, label='Logistic Baseline (0.70)')
 for fmt_name in formats.keys():
     if fmt_name in results:
-        ax.plot(results[fmt_name]['val_aucs'], label=fmt_name, linewidth=2, marker='o', markersize=3)
+        mat = build_epoch_matrix_for_format(fmt_name, 'val_aucs')
+        mean = np.nanmean(mat, axis=0)
+        std = np.nanstd(mat, axis=0)
+        epochs = np.arange(1, mean.shape[0] + 1)
+        ax.plot(epochs, mean, label=fmt_name, linewidth=2)
+        ax.fill_between(epochs, mean - std, mean + std, alpha=0.15)
 ax.set_xlabel('Epoch')
 ax.set_ylabel('AUC')
-ax.set_title('Validation AUC (Higher is Better)')
-ax.set_ylim([0.45, 0.80])
+ax.set_title('Validation AUC (mean ± std across seeds)')
+ax.set_ylim([0.45, 0.90])
+ax.xaxis.set_major_locator(MaxNLocator(integer=True))
 ax.legend(loc='best')
 ax.grid(True, alpha=0.3)
 
@@ -289,41 +378,33 @@ print("=" * 70)
 print()
 
 # Summary table
-print(f"{'Representation':<20} {'Input Size':<12} {'Train AUC':<12} {'Val AUC':<12} {'Best Epoch':<12}")
+# Summary table (aggregate across seeds)
+print(f"{'Representation':<20} {'Input Size':<12} {'Test AUC (mean±std)':<22}")
 print("-" * 70)
 for fmt_name in formats.keys():
     if fmt_name in results:
         r = results[fmt_name]
-        print(f"{fmt_name:<20} {r['input_size']:<12,} {r['train_auc_final']:<12.4f} {r['val_auc_final']:<12.4f} {r['best_epoch']:<12}")
+        mean = r['aggregate']['test_auc_mean']
+        std = r['aggregate']['test_auc_std']
+        print(f"{fmt_name:<20} {r['input_size']:<12,} {mean:.4f} ± {std:.4f}")
 
 print()
-print("Key Findings:")
+print("Key Findings (aggregate over seeds):")
 print("-" * 70)
+# Find best/worst by aggregate test mean (ignore nan)
+valid = {k: v['aggregate']['test_auc_mean'] for k, v in results.items() if not np.isnan(v['aggregate']['test_auc_mean'])}
+if len(valid) > 0:
+    best_fmt = max(valid.keys(), key=lambda x: valid[x])
+    worst_fmt = min(valid.keys(), key=lambda x: valid[x])
+    print(f"✅ BEST:  {best_fmt:<15} {valid[best_fmt]:.4f} AUC")
+    print(f"❌ WORST: {worst_fmt:<15} {valid[worst_fmt]:.4f} AUC")
+    print()
+    print(f"Performance Gap: {valid[best_fmt] - valid[worst_fmt]:.4f} AUC")
+else:
+    print("No valid test results available to summarize.")
 
-best_fmt = max(results.keys(), key=lambda x: results[x]['val_auc_final'])
-worst_fmt = min(results.keys(), key=lambda x: results[x]['val_auc_final'])
-
-print(f"✅ BEST:  {best_fmt:<15} {results[best_fmt]['val_auc_final']:.4f} AUC")
-print(f"❌ WORST: {worst_fmt:<15} {results[worst_fmt]['val_auc_final']:.4f} AUC")
 print()
-print(f"Performance Gap: {results[best_fmt]['val_auc_final'] - results[worst_fmt]['val_auc_final']:.4f} AUC")
-print()
-
-print("Comparison to Baselines:")
-print(f"  Logistic Regression (baseline):  0.69-0.71 AUC")
-print(f"  mag_phase MLP (this experiment):  {results['mag_phase']['val_auc_final']:.4f} AUC ← Matches baseline ✓")
-print()
-
-# Save results to JSON
-results_json = RESULTS_DIR / "experiment_1_results.json"
-# Remove arrays for JSON serialization
-results_json_data = {
-    fmt: {k: v for k, v in info.items() if not isinstance(v, list)}
-    for fmt, info in results.items()
-}
-with open(results_json, 'w') as f:
-    json.dump(results_json_data, f, indent=2)
-print(f"✅ Results saved: {results_json}")
+print(f"Results files: see {RESULTS_DIR} for per-format JSON and checkpoints")
 
 print()
 print("=" * 70)

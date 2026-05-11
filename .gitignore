@@ -38,12 +38,16 @@ build/
 /old_fd_tensors/
 /fd_tensors/
 /datasets/
+/results/
 
 # Large data
 *.zip
 *.tar.gz
 /deep_learning/outputs/
 /deep_learning/plots/
+*.pt
+*.json
+*.npz
 
 # OS files
 .DS_Store
