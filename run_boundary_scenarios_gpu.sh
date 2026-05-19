@@ -31,6 +31,7 @@ set -euo pipefail
 METADATA_FILE="${METADATA_FILE:-dataset_metadata_boundary_valid.csv}"
 START_SCENARIO="${START_SCENARIO:-1001}"
 END_SCENARIO="${END_SCENARIO:-1050}"
+SCENARIO_OFFSET="${SCENARIO_OFFSET:-1000}"
 MAX_CONCURRENT_SCENARIOS="${MAX_CONCURRENT_SCENARIOS:-8}"
 GPU_CPUS_PER_TASK="${GPU_CPUS_PER_TASK:-8}"
 GPU_TIME_LIMIT="${GPU_TIME_LIMIT:-24:00:00}"
@@ -62,6 +63,7 @@ echo "========================================"
 echo "Valid Boundary Scenario GPU Submitter"
 echo "Metadata file: ${METADATA_FILE}"
 echo "Scenario range: ${START_SCENARIO}..${END_SCENARIO}"
+echo "Array task IDs: 1..$((END_SCENARIO - START_SCENARIO + 1)) mapped with SCENARIO_OFFSET=${SCENARIO_OFFSET}"
 echo "Max concurrent scenarios: ${MAX_CONCURRENT_SCENARIOS}"
 echo "GPU CPUs per task: ${GPU_CPUS_PER_TASK}"
 echo "GPU time limit: ${GPU_TIME_LIMIT}"
@@ -71,6 +73,12 @@ echo "Node: ${SLURM_NODELIST:-submit}"
 echo "Start time: $(date)"
 echo "========================================"
 
+ARRAY_COUNT=$((END_SCENARIO - START_SCENARIO + 1))
+if [[ "$ARRAY_COUNT" -lt 1 ]]; then
+  echo "ERROR: scenario range is empty"
+  exit 1
+fi
+
 scenario_job_id=$(sbatch --parsable \
   --partition=a100 \
   --time="${GPU_TIME_LIMIT}" \
@@ -78,12 +86,12 @@ scenario_job_id=$(sbatch --parsable \
   --ntasks=1 \
   --cpus-per-task="${GPU_CPUS_PER_TASK}" \
   --gres=gpu:1 \
-  --array="${START_SCENARIO}-${END_SCENARIO}%${MAX_CONCURRENT_SCENARIOS}" \
+  --array="1-${ARRAY_COUNT}%${MAX_CONCURRENT_SCENARIOS}" \
   --job-name="gprmax_boundary_gpu" \
   --output="logs/boundary_gpu_%A_%a.out" \
   --error="logs/boundary_gpu_%A_%a.err" \
-  --export="ALL,USE_GPU=1,DELETE_IN=${DELETE_IN},DELETE_OUT=${DELETE_OUT},RUN_BUILD_FD=0,RUN_FIT_STATS=0,METADATA_FILE=${METADATA_FILE},CONDA_ENV_NAME=${CONDA_ENV_NAME},GPRMAX_MODULE=${GPRMAX_MODULE}" \
-  --wrap='sid=${SLURM_ARRAY_TASK_ID}; START_SCENARIO=${sid} END_SCENARIO=${sid} bash run_simulation_core.sh')
+  --export="ALL,USE_GPU=1,DELETE_IN=${DELETE_IN},DELETE_OUT=${DELETE_OUT},RUN_BUILD_FD=0,RUN_FIT_STATS=0,METADATA_FILE=${METADATA_FILE},CONDA_ENV_NAME=${CONDA_ENV_NAME},GPRMAX_MODULE=${GPRMAX_MODULE},SCENARIO_OFFSET=${SCENARIO_OFFSET}" \
+  --wrap='sid=$((SCENARIO_OFFSET + SLURM_ARRAY_TASK_ID)); START_SCENARIO=${sid} END_SCENARIO=${sid} bash run_simulation_core.sh')
 
 if [[ "$REFIT_STATS" == "1" ]]; then
   post_cmd="python build_fd_tensors.py --metadata '${METADATA_FILE}' --range ${START_SCENARIO} ${END_SCENARIO} --fit-stats"
