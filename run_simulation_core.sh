@@ -38,6 +38,7 @@
 #   DELETE_IN      (0/1, default 1)
 #   RUN_BUILD_FD   (0/1, default 1)
 #   RUN_FIT_STATS  (0/1, default RUN_BUILD_FD)
+#   METADATA_FILE  (default dataset_metadata.csv)
 
 set -euo pipefail
 
@@ -49,6 +50,7 @@ DELETE_IN="${DELETE_IN:-1}"
 RUN_BUILD_FD="${RUN_BUILD_FD:-1}"
 RUN_FIT_STATS="${RUN_FIT_STATS:-$RUN_BUILD_FD}"
 CONDA_ENV_NAME="${CONDA_ENV_NAME:-gprmax}"
+METADATA_FILE="${METADATA_FILE:-dataset_metadata.csv}"
 
 if [[ "$START_SCENARIO" -gt "$END_SCENARIO" ]]; then
   echo "ERROR: START_SCENARIO must be <= END_SCENARIO"
@@ -61,6 +63,7 @@ echo "Node: ${SLURM_NODELIST:-local}"
 echo "Scenario range: ${START_SCENARIO}..${END_SCENARIO}"
 echo "USE_GPU=${USE_GPU} DELETE_IN=${DELETE_IN} DELETE_OUT=${DELETE_OUT}"
 echo "RUN_BUILD_FD=${RUN_BUILD_FD} RUN_FIT_STATS=${RUN_FIT_STATS}"
+echo "METADATA_FILE=${METADATA_FILE}"
 echo "Start time: $(date)"
 echo "========================================"
 
@@ -92,7 +95,7 @@ for sid in $(seq "$START_SCENARIO" "$END_SCENARIO"); do
   echo "--- Scenario ${sid_pad} ---"
 
   # 1) Generate exactly this scenario from metadata
-  "$PYTHON" generate_dataset.py --scenario "$sid"
+  "$PYTHON" generate_dataset.py --metadata "$METADATA_FILE" --scenario "$sid"
 
   # 2) Run all 16 TX simulations
   for tx in $(seq -w 1 16); do
@@ -116,7 +119,7 @@ for sid in $(seq "$START_SCENARIO" "$END_SCENARIO"); do
 
   # 4) Build this scenario's FD tensor immediately (optional).
   if [[ "$RUN_BUILD_FD" == "1" ]]; then
-    "$PYTHON" build_fd_tensors.py --scenario "$sid"
+    "$PYTHON" build_fd_tensors.py --metadata "$METADATA_FILE" --scenario "$sid"
   fi
 
   # 5) Delete intermediate files for this scenario
@@ -133,7 +136,7 @@ done
 
 if [[ "$RUN_FIT_STATS" == "1" ]]; then
   # Refresh train-only normalization stats after the range finishes.
-  "$PYTHON" build_fd_tensors.py --fit-stats --fit-only
+  "$PYTHON" build_fd_tensors.py --metadata "$METADATA_FILE" --fit-stats --fit-only
 fi
 
 echo ""
